@@ -108,8 +108,8 @@ class VAE(nn.Module):
 
     def sample(self, epoch, sample_num, save_path):
         with torch.no_grad():
-            latent_sample = to_gpu(torch.randn(sample_num, self.nlatent), self.is_gpu)
-            sample = self.decode(latent_sample).cpu()
+            random_noise = to_gpu(torch.randn(sample_num, self.nlatent), self.is_gpu)
+            sample = self.decode(random_noise).cpu()
             save_image(sample.view(sample_num, 1, 28, 28),
                        save_path + 'epoch_' + str(epoch) + '.png')
 
@@ -305,8 +305,8 @@ class LSTM_VAE(nn.Module):
             loss, nll_loss, kl_loss = self.loss(output, target, batch_idx)
             loss.backward()
 
-            # mod : clip norm
-
+            # mod : Argumentization of the clip
+            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1)
             optimizer.step()
 
             total_loss += loss.item()
@@ -365,14 +365,60 @@ class LSTM_VAE(nn.Module):
             log_file, is_print=True)
 
     # mod : Not yet
-    def sample(self, epoch, sample_num, save_path):
+    def sample(self, epoch, sample_num, maxlen, idx2word, save_path, sample_method = 'sampling'):
+        random_noise = to_gpu(torch.randn(sample_num, self.nlatent), self.is_gpu)
+
         start_symbols = to_gpu(Variable(torch.ones(sample_num, 1).long()), self.is_gpu)
         start_symbols.data.fill_(1)
 
         embs = self.embedding_dec(start_symbols)
-        #aug_embs = torch.cat([embs, latent_expanded], 2)
+        aug_embs = torch.cat([embs, random_noise.unsqueeze(1)], 2)
 
-        pass
+        all_token_indicies = []
+        for i in range(maxlen):
+            output, state = self.decoder(aug_embs)
+            token_logits = self.hidden2token(output.squeeze(1))
+
+            if sample_method == 'sampling':
+                token_probs = F.softmax(token_logits, dim = -1)         # review that why it is -1
+                token_indicies = torch.multinomial(token_probs, num_samples=1)
+
+            elif sample_method == 'greedy':
+                token_indicies = torch.argmax(token_logits, dim = 1)
+
+            else:
+                raise NotImplementedError
+
+            token_indicies = token_indicies.unsqueeze(1)
+            all_token_indicies.append(token_indicies)
+
+            # Use the previous output word as input
+            embs = self.embedding_dec(token_indicies)
+            embs = embs.squeeze(1)
+            aug_embs = torch.cat([embs, random_noise.unsqueeze(1)], 2)
+
+        cat_token_indicies = torch.cat(all_token_indicies, 1)
+        cat_token_indicies = cat_token_indicies.squeeze(2)
+        cat_token_indicies = cat_token_indicies.data.cpu().numpy()
+
+        sampling_file = os.path.join(save_path, 'epoch_' + str(epoch) + "_sampling.txt")
+        sentences = []
+        for idx in cat_token_indicies:
+            words = [idx2word[x] for x in idx]
+            sentence_list = []
+
+            for word in words:
+                if word != '<eos>':
+                    sentence_list.append(word)
+                else:
+                    break
+
+            sentence = " ".join(sentence_list)
+
+            log_line(sentence, sampling_file, is_print=True)
+            sentences.append(sentence)
+
+        return
 
 
 

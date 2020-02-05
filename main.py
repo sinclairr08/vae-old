@@ -70,7 +70,9 @@ def main(args):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
             Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
-            # mod : add sample method in LSTM- VAE
+            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, save_path=args.save_path,
+                         sample_method = 'sampling')
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='VAE code')
