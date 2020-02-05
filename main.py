@@ -9,33 +9,68 @@ from torch import optim
 from torchvision import datasets, transforms
 
 from models import VAE
+from models import LSTM_VAE
 
-from utils import to_gpu
+from utils import to_gpu, batchify
+from preprocess import Corpus
 
 def main(args):
-    kwargs={'num_workers': 1, 'pin_memory': True} if args.cuda else {} # Modify
 
-    train_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('./data', train = True, download=True,
-                       transform = transforms.ToTensor()),
-        batch_size=args.batch_size, shuffle = True, **kwargs
-    )
+    # Case 1 : MNIST with VAE (Need more automization)
+    if args.dataset == 'mnist' and args.model == 'vae':
+        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
-    test_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('./data', train=False, download=True,
-                       transform=transforms.ToTensor()),
-        batch_size=args.batch_size, shuffle=False, ** kwargs
-    )
+        train_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train = True, download=True,
+                           transform = transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle = True, **kwargs
+        )
 
-    model = VAE(nlatent=args.nlatent,
-                is_gpu = args.cuda)
-    model = to_gpu(model, args.cuda)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+        test_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train=False, download=True,
+                           transform=transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle=False, ** kwargs
+        )
 
-    for epoch in range(1, args.epochs + 1):
-        model.train_epoch(epoch, optimizer, train_loader)
-        model.test_epoch(epoch, test_loader)
-        model.sample(epoch, sample_num=args.sample_num, save_path = args.save_path) ## MODIFICATION
+        Model = VAE(nlatent=args.nlatent,
+                    ninput=args.ninput, #com2
+                    nhidden=args.nhidden, # com2
+                    is_gpu = args.cuda)
+        Model = to_gpu(Model, args.cuda)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, optimizer, train_loader, args.log_file)
+            Model.test_epoch(epoch, test_loader, args.log_file)
+            Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
+
+    # Case 2 : SNLI with LSTM-VAE (Need more automization)
+    elif args.dataset == 'snli' and args.model == 'lstmvae':        # mod : bc or other datasets
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_VAE(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nemb = args.nemb,
+                         nlayers= args.nlayers,
+                         nhidden= args.nhidden,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
+            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            # mod : add sample method in LSTM- VAE
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='VAE code')
@@ -47,20 +82,31 @@ if __name__ == "__main__":
     parser.add_argument('--sample_num', type=int, default=20, help='The number of samples')
 
     # Data & Model Arguments
-    parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist]')
+    parser.add_argument('--dataset', type=str, default='snli', help='dataset; [mnist, snli]')
+    parser.add_argument('--model', type=str, default='lstmvae', help='model; [vae, lstmvae]') # com2
+    parser.add_argument('--maxlen', type=int, default=30, help='Max length of the sentence; Exceeded words are truncated') # com2
 
     # Model Architecture Arguments
-    parser.add_argument('--nlatent', type=int, default=20, help='The dimension size of latent')
+    parser.add_argument('--ninput', type=int, default=784, help='The dimension size of input') #com2
+    parser.add_argument('--nemb', type=int, default=300, help='The dimension size of embedding')  # com2
+    parser.add_argument('--nlatent', type=int, default=300, help='The dimension size of latent')
+    parser.add_argument('--nlayers', type=int, default=1, help='The number of layers')
+    parser.add_argument('--nhidden', type=int, default=300, help='The hidden dimension size of LSTM or CNN') #com2
+    parser.add_argument('--nvocab', type=int, default=20000, help='The number of vocabulary yo use')  # com2
     # Can add - encoder arch, dec arch,
 
     # Training Arguments
-    parser.add_argument('--epochs', type=int, default=10, help='The maximum number of epochs')
-    parser.add_argument('--batch_size', type=int, default=128, help='The number of batch size')
-    parser.add_argument('--lr', type=float, default=1e-03, help='Learning rate of ##') # Need separation
+    parser.add_argument('--epochs', type=int, default=20, help='The maximum number of epochs')
+    parser.add_argument('--batch_size', type=int, default=64, help='The number of batch size')
+    parser.add_argument('--lr', type=float, default=1e-01, help='Learning rate of ##') # Need separation
     parser.add_argument('--anneal_function', type=str, default='logistic', help='kl annealing function; [logistic]') # Add other functions
 
-    # File load & Save
+    # File load & Save  Arguments
     parser.add_argument('--save_path', type=str, default=None, help='location to save the trained file & samples')
+    parser.add_argument('--log_interval', type=int, default=200, help='interval to log training results')
+
+    # Utilty Arguments # mod : is it really need?
+    parser.add_argument('--lowercase', action='store_true',help='lowercase all text')
 
     # Could add another arguments
 
@@ -70,17 +116,24 @@ if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(args.gpu_num)
 
-    # We have to add more auto-completion of save folder name
+    # Make the save path
     if args.save_path is None:
-        args.save_path = './outputs/VAE/'
+        args.save_path = './outputs/{}/{}/'.format(args.model, args.dataset)
 
     if not os.path.isdir(args.save_path):
         os.makedirs(args.save_path)
 
+    # Initialize the log file
+    args.log_file = os.path.join(args.save_path, 'logs.txt')
+    with open(args.log_file, 'w') as f:
+        pass
+
+    # Random seed
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
+    # Cuda warnining
     if torch.cuda.is_available():
         if not args.cuda:
             print("WARNING: You have a CUDA device, "
