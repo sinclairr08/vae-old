@@ -67,12 +67,12 @@ class VAE(nn.Module):
 
     def train_epoch(self, epoch, optimizer, train_loader, log_file):
         self.train()
-        optimizer.zero_grad()
         total_loss = 0
 
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
             output, mu, logvar = self.forward(data)
+            optimizer.zero_grad()
 
             loss = self.loss(data, output, mu, logvar)
             loss.backward()
@@ -280,7 +280,6 @@ class LSTM_VAE(nn.Module):
 
     def train_epoch(self, epoch, optimizer, train_loader, log_file, log_interval):
         self.train()
-        optimizer.zero_grad()
         total_loss = 0
         total_nll = 0
         total_kl = 0
@@ -291,6 +290,7 @@ class LSTM_VAE(nn.Module):
             source = to_gpu(Variable(source), self.is_gpu)
             target = to_gpu(Variable(target), self.is_gpu)
             output = self.forward(source, lengths)
+            optimizer.zero_grad()
 
             loss, nll_loss, kl_loss = self.loss(output, target, batch_idx)
             loss.backward()
@@ -425,6 +425,8 @@ class LSTM_VAE(nn.Module):
 
         return
 
+
+# Reference : https://github.com/bfarzin/pytorch_aae
 class AAE(nn.Module):
     def __init__(self, nlatent, ninput, nhidden,  is_gpu):
 
@@ -440,25 +442,40 @@ class AAE(nn.Module):
         #self.dec = None
 
         # Encoder
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Linear(self.ninput, self.nhidden),
-            torch.nn.ReLU(),
-            torch.nn.Linear(self.nhidden, self.nlatent),
+
+        self.encoder = nn.Sequential(
+            nn.Linear(self.ninput, self.nhidden),
+            nn.Dropout(p=0.25),
+            nn.ReLU(),
+            nn.Linear(self.nhidden, self.nhidden),
+            nn.Dropout(p=0.25),
+            nn.ReLU(),
+            nn.Linear(self.nhidden, self.nlatent),
         )
 
         # Decoder
-        self.decoder = torch.nn.Sequential(
-            torch.nn.Linear(self.nlatent, self.nhidden),
-            torch.nn.ReLU(),
-            torch.nn.Linear(self.nhidden, self.ninput),
-            torch.nn.Sigmoid()
+
+        self.decoder = nn.Sequential(
+            nn.Linear(self.nlatent, self.nhidden),
+            nn.Dropout(p=0.25),
+            nn.ReLU(),
+            nn.Linear(self.nhidden, self.nhidden),
+            nn.Dropout(p=0.25),
+            nn.ReLU(),
+            nn.Linear(self.nhidden, self.ninput),
+            nn.Sigmoid()
         )
 
+
         # Discriminator
-        self.disc = torch.nn.Sequential(
-            torch.nn.Linear(self.nlatent, self.nhidden),
-            torch.nn.ReLU(),
-            torch.nn.Linear(self.nhidden, 1),
+        self.disc = nn.Sequential(
+            nn.Linear(self.nlatent, 500),
+            nn.Dropout(p=0.2),
+            nn.ReLU(),
+            nn.Linear(500, 500),
+            nn.Dropout(p=0.2),
+            nn.ReLU(),
+            nn.Linear(500, 1),
             torch.nn.Sigmoid()
         )
 
@@ -466,7 +483,7 @@ class AAE(nn.Module):
         self.optim_enc_nll = torch.optim.Adam(self.encoder.parameters(), lr=1e-04)
         self.optim_enc_adv = torch.optim.Adam(self.encoder.parameters(), lr=5e-05)
         self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=1e-04)
-        self.optim_disc = torch.optim.Adam(self.encoder.parameters(), lr=5e-05)
+        self.optim_disc = torch.optim.Adam(self.disc.parameters(), lr=5e-05)
 
         # Epsilon to prevent 0
         self.eps = 1e-15
@@ -487,9 +504,10 @@ class AAE(nn.Module):
 
         return output, latent
 
+
     def nll_loss(self, input, output):
-        loss_fn = nn.BCEWithLogitsLoss(reduction='sum')
-        loss = loss_fn(output, input.view(-1, self.ninput))
+        #loss_fn = nn.BCEWithLogitsLoss(reduction='sum')
+        loss = F.binary_cross_entropy(output, input.view(-1, self.ninput))
 
         return loss
 
@@ -512,16 +530,17 @@ class AAE(nn.Module):
 
     def train_epoch(self, epoch, train_loader, log_file):
         self.train()
-        self.optim_enc_nll.zero_grad()
-        self.optim_enc_adv.zero_grad()
-        self.optim_dec.zero_grad()
-        self.optim_disc.zero_grad()
 
         total_nll_loss = 0
         total_adv_loss = 0
 
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
+
+            self.optim_enc_nll.zero_grad()
+            self.optim_enc_adv.zero_grad()
+            self.optim_dec.zero_grad()
+            self.optim_disc.zero_grad()
 
             # Phase 1 : Train Autoencoder
             output, _ = self.forward(data)
@@ -533,21 +552,21 @@ class AAE(nn.Module):
             self.optim_dec.step()
 
             # Phase 2 : Train Discriminator
-
             latent_fake = self.encode(data)
             latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
 
             disc_loss = self.disc_loss(latent_real, latent_fake)
             disc_loss.backward()
-
             self.optim_disc.step()
 
             # Phase 3 : Train encoder
-            self.encoder.train()
             adv_loss = self.adv_loss(data)
             adv_loss.backward()
             total_adv_loss += adv_loss.item()
             self.optim_enc_adv.step()
+
+            #print("NLL Loss : {:.4f} ADV Loss : {:.4f} DISC Loss : {:.4f}".format(
+            #nll_loss, adv_loss, disc_loss))
 
         total_loss = total_nll_loss + total_adv_loss
         len_data = len(train_loader.dataset)

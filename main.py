@@ -120,16 +120,16 @@ if __name__ == "__main__":
     # Model Architecture Arguments
     parser.add_argument('--ninput', type=int, default=784, help='The dimension size of input')
     parser.add_argument('--nemb', type=int, default=300, help='The dimension size of embedding')
-    parser.add_argument('--nlatent', type=int, default=300, help='The dimension size of latent')
+    parser.add_argument('--nlatent', type=int, default=120, help='The dimension size of latent')
     parser.add_argument('--nlayers', type=int, default=1, help='The number of layers')
-    parser.add_argument('--nhidden', type=int, default=300, help='The hidden dimension size of LSTM or CNN')
+    parser.add_argument('--nhidden', type=int, default=1000, help='The hidden dimension size of LSTM or CNN')
     parser.add_argument('--nvocab', type=int, default=20000, help='The number of vocabulary to use')
     # Can add - encoder arch, dec arch,
 
     # Training Arguments
     parser.add_argument('--epochs', type=int, default=10, help='The maximum number of epochs')
-    parser.add_argument('--batch_size', type=int, default=64, help='The number of batch size')
-    parser.add_argument('--lr', type=float, default=1, help='Learning rate of ##') # Need separation.. and modification
+    parser.add_argument('--batch_size', type=int, default=128, help='The number of batch size')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate of ##') # Need separation.. and modification
     parser.add_argument('--anneal_function', type=str, default='logistic', help='kl annealing function; [logistic]') # Add other functions
 
     # File load & Save  Arguments
@@ -140,6 +140,18 @@ if __name__ == "__main__":
     parser.add_argument('--lowercase', action='store_true',help='lowercase all text')
 
     # Could add another arguments
+
+
+    # GUIDELINE for best hparams
+    # VAE - MNIST HYPARAM
+    # python3 main.py --model vae --dataset mnist --ninput 784 --nlatent 20 --nhidden 400
+
+    # LSTM VAE - SNLI HYPARAM
+    # python3 main.py --model lstmvae --dataset snli --nlatent 100 --nhidden 300
+
+    # AAE - MNIST HYPARAM
+    # python3 main.py --model aae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000
+    # lr ae = 1e-04 lr disc 5e-05
 
     args = parser.parse_args()
     print(vars(args))
