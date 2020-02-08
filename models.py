@@ -356,7 +356,7 @@ class LSTM_VAE(nn.Module):
 
     # mod : Not yet
     def sample(self, epoch, sample_num, maxlen, idx2word, save_path, sample_method = 'sampling'):
-        random_noise = to_gpu(torch.randn(sample_num, self.nlatent), self.is_gpu)
+        random_noise = to_gpu(torch.randn(sample_num, self.nhidden), self.is_gpu)
 
         start_symbols = to_gpu(Variable(torch.ones(sample_num, 1).long()), self.is_gpu)
         start_symbols.data.fill_(1)
@@ -402,9 +402,6 @@ class LSTM_VAE(nn.Module):
         cat_token_indicies = cat_token_indicies.squeeze(2)
         cat_token_indicies = cat_token_indicies.data.cpu().numpy()
 
-        print(cat_token_indicies.shape)
-        input()
-
         sampling_file = os.path.join(save_path, 'epoch_' + str(epoch) + "_sampling.txt")
         sentences = []
         for idx in cat_token_indicies:
@@ -420,7 +417,7 @@ class LSTM_VAE(nn.Module):
 
             sentence = " ".join(sentence_list)
 
-            log_line(sentence, sampling_file, is_print=True)
+            log_line(sentence, sampling_file, is_print=False)
             sentences.append(sentence)
 
         return
