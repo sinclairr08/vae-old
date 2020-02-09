@@ -8,7 +8,7 @@ import torch.utils.data
 from torch import optim
 from torchvision import datasets, transforms
 
-from models import VAE, LSTM_VAE, AAE
+from models import VAE, LSTM_VAE, AAE, ARAE
 
 from utils import to_gpu, batchify
 from preprocess import Corpus
@@ -101,7 +101,32 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
+    # Case 4 : MNIST with ARAE (Need more automization)
+    if args.dataset == 'mnist' and args.model == 'arae':
+        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
+        train_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train = True, download=True,
+                           transform = transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle = True, **kwargs
+        )
+
+        test_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train=False, download=True,
+                           transform=transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle=False, ** kwargs
+        )
+
+        Model = ARAE(nlatent=args.nlatent,
+                    ninput=args.ninput,
+                    nhidden=args.nhidden,
+                    is_gpu = args.cuda)
+        Model = to_gpu(Model, args.cuda)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, train_loader, args.log_file)
+            Model.test_epoch(epoch, test_loader, args.log_file)
+            Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='VAE code')
@@ -114,7 +139,7 @@ if __name__ == "__main__":
 
     # Data & Model Arguments
     parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist, snli]')
-    parser.add_argument('--model', type=str, default='aae', help='model; [vae, lstmvae, aae]')
+    parser.add_argument('--model', type=str, default='arae', help='model; [vae, lstmvae, aae, arae]')
     parser.add_argument('--maxlen', type=int, default=30, help='Max length of the sentence; Exceeded words are truncated')
 
     # Model Architecture Arguments
