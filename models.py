@@ -10,9 +10,6 @@ from torchvision.utils import save_image
 
 from utils import to_gpu, log_line
 
-# Reference : https://github.com/pytorch/examples/tree/master/vae
-# Have to add at the readme.md
-
 class VAE(nn.Module):
     def __init__(self, nlatent, ninput, nhidden,  is_gpu):
 
@@ -423,7 +420,6 @@ class LSTM_VAE(nn.Module):
         return
 
 
-# Reference : https://github.com/bfarzin/pytorch_aae
 class AAE(nn.Module):
     def __init__(self, nlatent, ninput, nhidden,  is_gpu):
 
