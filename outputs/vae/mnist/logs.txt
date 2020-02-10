@@ -8,3 +8,13 @@ Epoch 7 Train Loss : 530.5598 Test Loss : 529.7455
 Epoch 8 Train Loss : 530.1905 Test Loss : 529.2419
 Epoch 9 Train Loss : 529.8431 Test Loss : 528.9769
 Epoch 10 Train Loss : 529.6181 Test Loss : 528.7522
+Epoch 11 Train Loss : 529.4137 Test Loss : 528.5970
+Epoch 12 Train Loss : 529.2395 Test Loss : 528.4293
+Epoch 13 Train Loss : 529.0743 Test Loss : 528.2568
+Epoch 14 Train Loss : 528.9150 Test Loss : 528.1407
+Epoch 15 Train Loss : 528.7937 Test Loss : 527.9999
+Epoch 16 Train Loss : 528.6685 Test Loss : 527.8612
+Epoch 17 Train Loss : 528.5482 Test Loss : 527.7799
+Epoch 18 Train Loss : 528.4390 Test Loss : 527.6783
+Epoch 19 Train Loss : 528.3608 Test Loss : 527.6271
+Epoch 20 Train Loss : 528.2793 Test Loss : 527.5267

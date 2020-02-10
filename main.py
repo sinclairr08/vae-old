@@ -8,7 +8,12 @@ import torch.utils.data
 from torch import optim
 from torchvision import datasets, transforms
 
-from models import VAE, LSTM_VAE, AAE, ARAE
+from models.vae import VAE
+from models.aae import AAE
+from models.arae import ARAE
+from models.lstmvae import LSTM_VAE
+from models.lstmaae import LSTM_AAE
+from models.lstmarae import LSTM_ARAE
 
 from utils import to_gpu, batchify
 from preprocess import Corpus
@@ -128,6 +133,65 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
+    # Case 5 : SNLI with LSTM-AAE (Need more automization)
+    elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_AAE(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nemb = args.nemb,
+                         nlayers= args.nlayers,
+                         nhidden= args.nhidden,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, train_loader, args.log_file, args.log_interval)
+            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+                         save_path=args.save_path, sample_method = 'sampling')
+
+    # Case 6 : SNLI with LSTM-ARAE (Need more automization)
+    elif args.dataset == 'snli' and args.model == 'lstmarae':        # mod : bc or other datasets
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_ARAE(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nemb = args.nemb,
+                         nlayers= args.nlayers,
+                         nhidden= args.nhidden,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, train_loader, args.log_file, args.log_interval)
+            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+                         save_path=args.save_path, sample_method = 'sampling')
+
+    else:
+        raise NotImplementedError
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='VAE code')
 
@@ -139,7 +203,7 @@ if __name__ == "__main__":
 
     # Data & Model Arguments
     parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist, snli]')
-    parser.add_argument('--model', type=str, default='arae', help='model; [vae, lstmvae, aae, arae]')
+    parser.add_argument('--model', type=str, default='lstmaae', help='model; [vae, aae, arae, lstmvae, lstmaae]')
     parser.add_argument('--maxlen', type=int, default=30, help='Max length of the sentence; Exceeded words are truncated')
 
     # Model Architecture Arguments
@@ -177,6 +241,15 @@ if __name__ == "__main__":
     # AAE - MNIST HYPARAM
     # python3 main.py --model aae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000
     # lr ae = 1e-04 lr disc 5e-05
+
+    # ARAE - MNIST HYPARAM
+    # python3 main.py --model arae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000
+
+    # LSTM AAE - SNLI HYPARAM
+    # python3 main.py --model lstmaae --dataset snli --nlatent 300 --nhidden 300
+
+    # LSTM ARAE - SNLI HYPARAM
+    # python3 main.py --model lstmarae --dataset snli --nlatent 300 --nhidden 300
 
     args = parser.parse_args()
     print(vars(args))
