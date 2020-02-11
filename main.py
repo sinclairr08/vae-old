@@ -41,14 +41,85 @@ def main(args):
                     nhidden=args.nhidden,
                     is_gpu = args.cuda)
         Model = to_gpu(Model, args.cuda)
-        optimizer = optim.Adam(Model.parameters(), lr=args.lr)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
 
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file)
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
 
-    # Case 2 : SNLI with LSTM-VAE (Need more automization)
+    # Case 2 : MNIST with AAE (Need more automization)
+    elif args.dataset == 'mnist' and args.model == 'aae':
+        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
+
+        train_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train = True, download=True,
+                           transform = transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle = True, **kwargs
+        )
+
+        test_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train=False, download=True,
+                           transform=transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle=False, ** kwargs
+        )
+
+        Model = AAE(nlatent=args.nlatent,
+                    ninput=args.ninput,
+                    nhidden=args.nhidden,
+                    nDhidden=args.nDhidden,
+                    is_gpu = args.cuda)
+        Model = to_gpu(Model, args.cuda)
+
+        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
+        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
+        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
+        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
+                              args.log_file)
+            Model.test_epoch(epoch, test_loader, args.log_file)
+            Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
+
+    # Case 3 : MNIST with ARAE (Need more automization)
+    elif args.dataset == 'mnist' and args.model == 'arae':
+        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
+
+        train_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train = True, download=True,
+                           transform = transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle = True, **kwargs
+        )
+
+        test_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train=False, download=True,
+                           transform=transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle=False, ** kwargs
+        )
+
+        Model = ARAE(nlatent=args.nlatent,
+                    ninput=args.ninput,
+                    nhidden=args.nhidden,
+                    nDhidden=args.nDhidden,
+                    nGhidden=args.nGhidden,
+                    nnoise= args.nnoise,
+                    is_gpu = args.cuda)
+        Model = to_gpu(Model, args.cuda)
+
+        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
+        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
+        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
+        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
+        optim_gen = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_G)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
+                              args.log_file)
+            Model.test_epoch(epoch, test_loader, args.log_file)
+            Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
+
+    # Case 4 : SNLI with LSTM-VAE (Need more automization)
     elif args.dataset == 'snli' and args.model == 'lstmvae':        # mod : bc or other datasets
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
@@ -68,7 +139,7 @@ def main(args):
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
-        optimizer = optim.Adam(Model.parameters(), lr=args.lr)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
 
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
@@ -76,62 +147,6 @@ def main(args):
                              args.save_path)
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          save_path=args.save_path, sample_method = 'sampling')
-            # mod : NAN error
-            # moded : error fix
-
-    # Case 3 : MNIST with AAE (Need more automization)
-    if args.dataset == 'mnist' and args.model == 'aae':
-        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
-
-        train_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train = True, download=True,
-                           transform = transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle = True, **kwargs
-        )
-
-        test_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train=False, download=True,
-                           transform=transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle=False, ** kwargs
-        )
-
-        Model = AAE(nlatent=args.nlatent,
-                    ninput=args.ninput,
-                    nhidden=args.nhidden,
-                    is_gpu = args.cuda)
-        Model = to_gpu(Model, args.cuda)
-
-        for epoch in range(1, args.epochs + 1):
-            Model.train_epoch(epoch, train_loader, args.log_file)
-            Model.test_epoch(epoch, test_loader, args.log_file)
-            Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
-
-    # Case 4 : MNIST with ARAE (Need more automization)
-    if args.dataset == 'mnist' and args.model == 'arae':
-        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
-
-        train_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train = True, download=True,
-                           transform = transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle = True, **kwargs
-        )
-
-        test_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train=False, download=True,
-                           transform=transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle=False, ** kwargs
-        )
-
-        Model = ARAE(nlatent=args.nlatent,
-                    ninput=args.ninput,
-                    nhidden=args.nhidden,
-                    is_gpu = args.cuda)
-        Model = to_gpu(Model, args.cuda)
-
-        for epoch in range(1, args.epochs + 1):
-            Model.train_epoch(epoch, train_loader, args.log_file)
-            Model.test_epoch(epoch, test_loader, args.log_file)
-            Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
     # Case 5 : SNLI with LSTM-AAE (Need more automization)
     elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
@@ -149,13 +164,19 @@ def main(args):
                          ntokens = ntokens,
                          nemb = args.nemb,
                          nlayers= args.nlayers,
-                         nhidden= args.nhidden,
+                         nDhidden=args.nDhidden,
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
 
+        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
+        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
+        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
+        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
+
         for epoch in range(1, args.epochs + 1):
-            Model.train_epoch(epoch, train_loader, args.log_file, args.log_interval)
+            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
+                              args.log_file, args.log_interval)
             Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
@@ -177,13 +198,23 @@ def main(args):
                          ntokens = ntokens,
                          nemb = args.nemb,
                          nlayers= args.nlayers,
-                         nhidden= args.nhidden,
+                         nDhidden=args.nDhidden,
+                         nGhidden=args.nGhidden,
+                         nnoise= args.nnoise,
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
 
+
+        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
+        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
+        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
+        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
+        optim_gen = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_G)
+
         for epoch in range(1, args.epochs + 1):
-            Model.train_epoch(epoch, train_loader, args.log_file, args.log_interval)
+            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
+                              args.log_file, args.log_interval)
             Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
@@ -213,12 +244,19 @@ if __name__ == "__main__":
     parser.add_argument('--nlayers', type=int, default=1, help='The number of layers')
     parser.add_argument('--nhidden', type=int, default=1000, help='The hidden dimension size of LSTM or CNN')
     parser.add_argument('--nvocab', type=int, default=20000, help='The number of vocabulary to use')
+    parser.add_argument('--nnoise', type=int, default=100, help='The dimension of noise for ARAE')
+
+    parser.add_argument('--nDhidden', type=int, default=500, help='The dimension of noise for ARAE')
+    parser.add_argument('--nGhidden', type=int, default=500, help='The dimension of noise for ARAE')
     # Can add - encoder arch, dec arch,
 
     # Training Arguments
-    parser.add_argument('--epochs', type=int, default=10, help='The maximum number of epochs')
+    parser.add_argument('--epochs', type=int, default=20, help='The maximum number of epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='The number of batch size')
-    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate of ##') # Need separation.. and modification
+    parser.add_argument('--lr_ae', type=float, default=1e-4, help='Learning rate of Autoencoder')
+    parser.add_argument('--lr_adv', type=float, default=5e-5, help='Learning rate of encoder with adversarial loss')
+    parser.add_argument('--lr_D', type=float, default=5e-5, help='Learning rate of Discriminator')
+    parser.add_argument('--lr_G', type=float, default=5e-5, help='Learning rate of Generator')
     parser.add_argument('--anneal_function', type=str, default='logistic', help='kl annealing function; [logistic]') # Add other functions
 
     # File load & Save  Arguments
@@ -233,23 +271,23 @@ if __name__ == "__main__":
 
     # GUIDELINE for best hparams
     # VAE - MNIST HYPARAM
-    # python3 main.py --model vae --dataset mnist --ninput 784 --nlatent 20 --nhidden 400
-
-    # LSTM VAE - SNLI HYPARAM
-    # python3 main.py --model lstmvae --dataset snli --nlatent 100 --nhidden 300
+    # python3 main.py --model vae --dataset mnist --ninput 784 --nlatent 20 --nhidden 400 --lr_ae 1e-3
 
     # AAE - MNIST HYPARAM
-    # python3 main.py --model aae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000
+    # python3 main.py --model aae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000 --nDhidden 500
     # lr ae = 1e-04 lr disc 5e-05
 
     # ARAE - MNIST HYPARAM
-    # python3 main.py --model arae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000
+    # python3 main.py --model arae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000  --nDhidden 500 --nGhidden 500
+
+    # LSTM VAE - SNLI HYPARAM
+    # python3 main.py --model lstmvae --dataset snli --nlatent 300 --nhidden 300
 
     # LSTM AAE - SNLI HYPARAM
-    # python3 main.py --model lstmaae --dataset snli --nlatent 300 --nhidden 300
+    # python3 main.py --model lstmaae --dataset snli --nlatent 300  --nDhidden 300
 
     # LSTM ARAE - SNLI HYPARAM
-    # python3 main.py --model lstmarae --dataset snli --nlatent 300 --nhidden 300
+    # python3 main.py --model lstmarae --dataset snli --nlatent 300 --nnoise 100  --nDhidden 300 --nGhidden 300
 
     args = parser.parse_args()
     print(vars(args))

@@ -11,8 +11,7 @@ from utils import to_gpu, log_line
 
 class LSTM_AAE(nn.Module):
     def __init__(self, enc, dec, nlatent, ntokens, nemb,
-                 nlayers, nhidden,
-                 is_gpu):
+                 nlayers, nDhidden, is_gpu):
 
         super(LSTM_AAE, self).__init__()
 
@@ -21,7 +20,8 @@ class LSTM_AAE(nn.Module):
         self.ntokens = ntokens
         self.nemb = nemb
         self.nlayers = nlayers
-        self.nhidden = nhidden
+        self.nhidden = nlatent
+        self.nDhidden = nDhidden
 
         # Model infos
         self.enc = enc
@@ -57,17 +57,11 @@ class LSTM_AAE(nn.Module):
             raise NotImplementedError
 
         self.disc = nn.Sequential(
-            nn.Linear(self.nlatent, 300),
+            nn.Linear(self.nlatent, self.nDhidden),
             nn.ReLU(),
-            nn.Linear(300, 1),
+            nn.Linear(self.nDhidden, 1),
             torch.nn.Sigmoid()
         )
-
-        # optims
-        self.optim_enc_nll = torch.optim.Adam(self.encoder.parameters(), lr=1e-04)
-        self.optim_enc_adv = torch.optim.Adam(self.encoder.parameters(), lr=1e-04)
-        self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=1e-04)
-        self.optim_disc = torch.optim.Adam(self.disc.parameters(), lr=1e-04)
 
         self.eps = 1e-15
 
@@ -75,9 +69,6 @@ class LSTM_AAE(nn.Module):
         self.embedding_enc = nn.Embedding(self.ntokens, nemb)
         self.embedding_dec = nn.Embedding(self.ntokens, nemb)
 
-        #self.hidden2mean = nn.Linear(self.nhidden, self.nlatent)
-        #self.hidden2logvar = nn.Linear(self.nhidden, self.nlatent)
-        #self.latent2hidden = nn.Linear(self.nlatent, self.nhidden)
         self.hidden2token = nn.Linear(self.nhidden, self.ntokens)
 
         self.init_weights()
@@ -98,12 +89,14 @@ class LSTM_AAE(nn.Module):
         self.hidden2token.bias.data.fill_(0)
 
     # Initialize the hidden state and cell state both
+    # dep : Deprecatae since it is not used
+    ''' 
     def init_hidden_cell(self, batch_size):
         hidden_state = to_gpu(Variable(torch.zeros(self.nlayers, batch_size, self.nhidden)), self.is_gpu)
         cell_state = to_gpu(Variable(torch.zeros(self.nlayers, batch_size, self.nhidden)), self.is_gpu)
 
         return (hidden_state, cell_state)
-
+    '''
     def encode(self, input, lengths):
         embs = self.embedding_enc(input)
         packed_embs = pack_padded_sequence(
@@ -116,27 +109,23 @@ class LSTM_AAE(nn.Module):
         hidden = state[0][0]
 
         # mod : Normalize to Gaussian
+        # mod : argumentize
+        hidden = hidden / torch.norm(hidden, p=2, dim=1, keepdim=True)
+
+        self.is_hidden_noise = True
+        self.hidden_noise_r = 0.2
+
+        if self.is_hidden_noise and self.hidden_noise_r > 0:
+            hidden_noise = torch.normal(mean=torch.zeros_like(hidden),
+                                        std=self.hidden_noise_r)
+            hidden = hidden + to_gpu(Variable(hidden_noise), self.is_gpu)
+
         return hidden
-
-    ''' 
-    def reparameterize(self, hidden):
-        self.mu = self.hidden2mean(hidden)
-        self.logvar = self.hidden2logvar(hidden)
-        self.std = torch.exp(0.5 * self.logvar)
-
-        eps = to_gpu(torch.rand_like(self.std), self.is_gpu)  # epsilon for reparametrization
-        latent = self.mu + self.std * eps
-
-        return latent
-    '''
 
     def decode(self, hidden, batch_size, maxlen, input=None, lengths=None):
 
         # For the concatenation with embeddings
         hidden_expanded = hidden.unsqueeze(1).repeat(1, maxlen, 1)
-
-        # mod : Decoder word dropout : input에 장난질 치기
-        # mod : -> input이 일정 확률보다 낮으면 UNK로
 
         embs = self.embedding_dec(input)
         aug_embs = torch.cat([embs, hidden_expanded], 2)
@@ -144,13 +133,6 @@ class LSTM_AAE(nn.Module):
         packed_embs = pack_padded_sequence(
             input=aug_embs, lengths=lengths, batch_first=True
         )
-
-        # mod : NEED INITIALIZED STATE
-        """
-        state = self.init_hidden(batch_size)
-        packed_output, state =self.decoder(packed_embs, state)
-
-        """
 
         packed_output, state = self.decoder(packed_embs)
         output_hidden, lengths = pad_packed_sequence(packed_output, batch_first=True)
@@ -197,7 +179,7 @@ class LSTM_AAE(nn.Module):
         loss = -torch.mean(torch.log(disc_fake + self.eps))
         return loss
 
-    def train_epoch(self, epoch, train_loader, log_file, log_interval):
+    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, log_file, log_interval):
         self.train()
         total_nll = 0
         total_adv = 0
@@ -208,44 +190,42 @@ class LSTM_AAE(nn.Module):
             source = to_gpu(Variable(source), self.is_gpu)
             target = to_gpu(Variable(target), self.is_gpu)
 
-            self.optim_enc_nll.zero_grad()
-            self.optim_enc_adv.zero_grad()
-            self.optim_dec.zero_grad()
-            self.optim_disc.zero_grad()
+            optim_enc_nll.zero_grad()
+            optim_enc_adv.zero_grad()
+            optim_dec.zero_grad()
+            optim_disc.zero_grad()
 
             output = self.forward(source, lengths)
-
 
             # Phase 1 : Train Autoencoder
             nll_loss = self.nll_loss(output, target)
             nll_loss.backward()
             total_nll += nll_loss.item()
 
-
             # mod : Argumentization of the clip
             torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1)
-            self.optim_enc_nll.step()
-            self.optim_dec.step()
+            optim_enc_nll.step()
+            optim_dec.step()
 
             latent_fake = self.encode(source, lengths)
             latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
 
             disc_loss = self.disc_loss(latent_real, latent_fake)
             disc_loss.backward()
-            self.optim_disc.step()
+            optim_disc.step()
 
             # Phase 3 : Train encoder
             adv_loss = self.adv_loss(source, lengths)
             adv_loss.backward()
             total_adv += adv_loss.item()
-            self.optim_enc_adv.step()
+            optim_enc_adv.step()
 
             if batch_idx % log_interval == 0 and batch_idx > 0:
                 pass
 
         total_loss = total_nll + total_adv
 
-        log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} ADV Loss : {:.4f}".format(
+        log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} Adv Loss : {:.4f}".format(
             epoch, total_loss / total_len, total_nll / total_len, total_adv / total_len), log_file, is_print=True)
 
         return total_loss, total_nll, total_adv
@@ -288,7 +268,7 @@ class LSTM_AAE(nn.Module):
                         f.write("\n\n")
 
         total_loss = total_nll + total_adv
-        log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} ADV Loss : {:.4f}".format(
+        log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} Adv Loss : {:.4f}".format(
             epoch, total_loss / total_len, total_nll / total_len, total_adv / total_len),
             log_file, is_print=True)
 

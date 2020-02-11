@@ -7,7 +7,7 @@ from torchvision.utils import save_image
 from utils import to_gpu, log_line
 
 class AAE(nn.Module):
-    def __init__(self, nlatent, ninput, nhidden, is_gpu):
+    def __init__(self, nlatent, ninput, nhidden, nDhidden, is_gpu):
 
         super(AAE, self).__init__()
         # self init area
@@ -15,6 +15,7 @@ class AAE(nn.Module):
         self.nlatent = nlatent
         self.ninput = ninput
         self.nhidden = nhidden
+        self.nDhidden = nDhidden
 
         # mod : Modlarize within the class
         # self.enc = None
@@ -47,19 +48,13 @@ class AAE(nn.Module):
 
         # Discriminator
         self.disc = nn.Sequential(
-            nn.Linear(self.nlatent, 500),
+            nn.Linear(self.nlatent, self.nDhidden),
             nn.ReLU(),
-            nn.Linear(500, 500),
+            nn.Linear(self.nDhidden, self.nDhidden),
             nn.ReLU(),
-            nn.Linear(500, 1),
+            nn.Linear(self.nDhidden, 1),
             torch.nn.Sigmoid()
         )
-
-        # mod : Total Optim requires somewhat change
-        self.optim_enc_nll = torch.optim.Adam(self.encoder.parameters(), lr=1e-04)
-        self.optim_enc_adv = torch.optim.Adam(self.encoder.parameters(), lr=5e-05)
-        self.optim_dec = torch.optim.Adam(self.decoder.parameters(), lr=1e-04)
-        self.optim_disc = torch.optim.Adam(self.disc.parameters(), lr=5e-05)
 
         # Epsilon to prevent 0
         self.eps = 1e-15
@@ -102,7 +97,7 @@ class AAE(nn.Module):
         loss = -torch.mean(torch.log(disc_fake + self.eps))
         return loss
 
-    def train_epoch(self, epoch, train_loader, log_file):
+    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, log_file):
         self.train()
 
         total_nll_loss = 0
@@ -111,10 +106,10 @@ class AAE(nn.Module):
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
 
-            self.optim_enc_nll.zero_grad()
-            self.optim_enc_adv.zero_grad()
-            self.optim_dec.zero_grad()
-            self.optim_disc.zero_grad()
+            optim_enc_nll.zero_grad()
+            optim_enc_adv.zero_grad()
+            optim_dec.zero_grad()
+            optim_disc.zero_grad()
 
             # Phase 1 : Train Autoencoder
             output, _ = self.forward(data)
@@ -122,8 +117,8 @@ class AAE(nn.Module):
             nll_loss = self.nll_loss(data, output)  # Need to check the names
             nll_loss.backward()
             total_nll_loss += nll_loss.item()
-            self.optim_enc_nll.step()
-            self.optim_dec.step()
+            optim_enc_nll.step()
+            optim_dec.step()
 
             # Phase 2 : Train Discriminator
             latent_fake = self.encode(data)
@@ -131,22 +126,19 @@ class AAE(nn.Module):
 
             disc_loss = self.disc_loss(latent_real, latent_fake)
             disc_loss.backward()
-            self.optim_disc.step()
+            optim_disc.step()
 
             # Phase 3 : Train encoder
             adv_loss = self.adv_loss(data)
             adv_loss.backward()
             total_adv_loss += adv_loss.item()
-            self.optim_enc_adv.step()
-
-            # print("NLL Loss : {:.4f} ADV Loss : {:.4f} DISC Loss : {:.4f}".format(
-            # nll_loss, adv_loss, disc_loss))
+            optim_enc_adv.step()
 
         total_loss = total_nll_loss + total_adv_loss
-        len_data = len(train_loader.dataset)
+        total_len = len(train_loader.dataset)
         log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} Adv Loss : {:.4f}".format(
-            epoch, total_loss / len_data, total_nll_loss / len_data,
-                   total_adv_loss / len_data), log_file, is_print=True)
+            epoch, total_loss / total_len, total_nll_loss / total_len,
+                   total_adv_loss / total_len), log_file, is_print=True)
 
     def test_epoch(self, epoch, test_loader, log_file):
         self.eval()
@@ -165,10 +157,10 @@ class AAE(nn.Module):
                 total_adv_loss += adv_loss.item()
 
         total_loss = total_nll_loss + total_adv_loss
-        len_data = len(test_loader.dataset)
+        total_len = len(test_loader.dataset)
         log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} Adv Loss : {:.4f}".format(
-            epoch, total_loss / len_data, total_nll_loss / len_data,
-                   total_adv_loss / len_data), log_file, is_print=True)
+            epoch, total_loss / total_len, total_nll_loss / total_len,
+                   total_adv_loss / total_len), log_file, is_print=True)
 
     def sample(self, epoch, sample_num, save_path):
         with torch.no_grad():

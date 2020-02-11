@@ -55,6 +55,7 @@ $ python3 main.py --model vae --dataset mnist --ninput 784 --nlatent 20 --nhidde
 * Codes
   1. [Pytorch VAE](https://github.com/pytorch/examples/tree/master/vae)
   2. [Pytorch AAE](https://github.com/bfarzin/pytorch_aae)
+  3. [Pytorch Sentence VAE](https://github.com/timbmg/Sentence-VAE)
 
 
 

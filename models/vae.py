@@ -55,38 +55,53 @@ class VAE(nn.Module):
         nll_loss = loss_fn(output, input.view(-1, self.ninput))
         kl_loss = -0.5 * torch.sum(1 + logvar - mu ** 2 - torch.exp(logvar))
 
-        return nll_loss + kl_loss
+        return nll_loss + kl_loss, nll_loss, kl_loss
 
     def train_epoch(self, epoch, optimizer, train_loader, log_file):
         self.train()
         total_loss = 0
+        total_nll_loss = 0
+        total_kl_loss = 0
 
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
             output, mu, logvar = self.forward(data)
             optimizer.zero_grad()
 
-            loss = self.loss(data, output, mu, logvar)
+            loss, nll_loss, kl_loss = self.loss(data, output, mu, logvar)
             loss.backward()
-            total_loss += loss.item()
+
             optimizer.step()
 
-        log_line("Epoch {} Train Loss : {:.4f}".format(
-            epoch, total_loss / len(train_loader.dataset)), log_file, is_print=True, is_line=False)
+            total_nll_loss += nll_loss.item()
+            total_kl_loss += kl_loss.item()
+            total_loss += loss.item()
+
+        total_len = len(train_loader.dataset)
+        log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} KL Loss : {:.4f}".format(
+            epoch, total_loss / total_len, total_nll_loss / total_len, total_kl_loss / total_len),
+            log_file, is_print=True, is_line=True)
 
     def test_epoch(self, epoch, test_loader, log_file):
         self.eval()
         total_loss = 0
+        total_nll_loss = 0
+        total_kl_loss = 0
 
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(test_loader):
                 data = to_gpu(data, self.is_gpu)
                 output, mu, logvar = self.forward(data)
-                loss = self.loss(data, output, mu, logvar)
+                loss, nll_loss, kl_loss = self.loss(data, output, mu, logvar)
+
+                total_nll_loss += nll_loss.item()
+                total_kl_loss += kl_loss.item()
                 total_loss += loss.item()
 
-        log_line("Test Loss : {:.4f}".format(
-            total_loss / len(test_loader.dataset)), log_file, is_print=True)
+        total_len = len(test_loader.dataset)
+        log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} KL Loss : {:.4f}".format(
+            epoch, total_loss / total_len, total_nll_loss / total_len, total_kl_loss / total_len),
+            log_file, is_print=True)
 
     def sample(self, epoch, sample_num, save_path):
         with torch.no_grad():

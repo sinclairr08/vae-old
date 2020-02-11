@@ -27,6 +27,8 @@ class LSTM_VAE(nn.Module):
         self.enc = enc
         self.dec = dec
 
+        self.word_dropout = 0.5
+
         # Tools
         self.is_gpu = is_gpu
 
@@ -89,11 +91,14 @@ class LSTM_VAE(nn.Module):
         self.hidden2token.bias.data.fill_(0)
 
     # Initialize the hidden state and cell state both
+    # dep : Deprecatae since it is not used
+    ''' 
     def init_hidden_cell(self, batch_size):
         hidden_state = to_gpu(Variable(torch.zeros(self.nlayers, batch_size, self.nhidden)), self.is_gpu)
         cell_state = to_gpu(Variable(torch.zeros(self.nlayers, batch_size, self.nhidden)), self.is_gpu)
 
         return (hidden_state, cell_state)
+    '''
 
     def encode(self, input, lengths):
         embs = self.embedding_enc(input)
@@ -107,6 +112,17 @@ class LSTM_VAE(nn.Module):
         hidden = state[0][0]
 
         # mod : Normalize to Gaussian
+        # mod : argumentize
+        hidden = hidden / torch.norm(hidden, p=2, dim=1, keepdim=True)
+
+        self.is_hidden_noise = True
+        self.hidden_noise_r = 0.2
+
+        if self.is_hidden_noise and self.hidden_noise_r > 0 :
+            hidden_noise = torch.normal(mean=torch.zeros_like(hidden),
+                                        std = self.hidden_noise_r)
+            hidden  = hidden + to_gpu(Variable(hidden_noise), self.is_gpu)
+
         return hidden
 
     def reparameterize(self, hidden):
@@ -124,22 +140,23 @@ class LSTM_VAE(nn.Module):
         # For the concatenation with embeddings
         hidden_expanded = hidden.unsqueeze(1).repeat(1, maxlen, 1)
 
-        # mod : Decoder word dropout : input에 장난질 치기
-        # mod : -> input이 일정 확률보다 낮으면 UNK로
+        # Replace the word as a <UNK> token
+        # Steal from https://github.com/timbmg/Sentence-VAE/blob/master/model.py
 
-        embs = self.embedding_dec(input)
+        if self.word_dropout > 0:
+            prob = to_gpu(torch.rand(input.size()), self.is_gpu)
+            prob[(input.data - 1) * input.data == 0] = 1        # If the token is either <SOS> or <PAD>
+            decoder_input = input.clone()
+            decoder_input[prob < self.word_dropout] = 3         # 3 means <UNK> token index
+            embs = self.embedding_dec(decoder_input)
+        else:
+            embs = self.embedding_dec(input)
+
         aug_embs = torch.cat([embs, hidden_expanded], 2)
 
         packed_embs = pack_padded_sequence(
             input=aug_embs, lengths=lengths, batch_first=True
         )
-
-        # mod : NEED INITIALIZED STATE
-        """
-        state = self.init_hidden(batch_size)
-        packed_output, state =self.decoder(packed_embs, state)
-
-        """
 
         packed_output, state = self.decoder(packed_embs)
         output_hidden, lengths = pad_packed_sequence(packed_output, batch_first=True)
@@ -185,8 +202,8 @@ class LSTM_VAE(nn.Module):
     def train_epoch(self, epoch, optimizer, train_loader, log_file, log_interval):
         self.train()
         total_loss = 0
-        total_nll = 0
-        total_kl = 0
+        total_nll_loss = 0
+        total_kl_loss = 0
         total_len = 0
 
         for batch_idx, (source, target, lengths) in enumerate(train_loader):
@@ -204,22 +221,23 @@ class LSTM_VAE(nn.Module):
             optimizer.step()
 
             total_loss += loss.item()
-            total_nll += nll_loss.item()
-            total_kl += kl_loss.item()
+            total_nll_loss += nll_loss.item()
+            total_kl_loss += kl_loss.item()
 
             if batch_idx % log_interval == 0 and batch_idx > 0:
                 pass
 
         log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} KL Loss : {:.4f}".format(
-            epoch, total_loss / total_len, total_nll / total_len, total_kl / total_len), log_file, is_print=True)
+            epoch, total_loss / total_len, total_nll_loss / total_len, total_kl_loss / total_len),
+            log_file, is_print=True)
 
-        return total_loss, total_nll, total_kl
+        return total_loss, total_nll_loss, total_kl_loss
 
     def test_epoch(self, epoch, test_loader, idx2word, log_file, save_path):
         self.eval()
         total_loss = 0
-        total_nll = 0
-        total_kl = 0
+        total_nll_loss = 0
+        total_kl_loss = 0
         total_len = 0
 
         epoch_ae_generated_file = os.path.join(save_path, "epoch_" + str(epoch) + "_ae_generation.txt")
@@ -234,8 +252,8 @@ class LSTM_VAE(nn.Module):
 
                 loss, nll_loss, kl_loss = self.loss(output, target, batch_idx)
                 total_loss += loss.item()
-                total_nll += nll_loss.item()
-                total_kl += kl_loss.item()
+                total_nll_loss += nll_loss.item()
+                total_kl_loss += kl_loss.item()
 
                 with open(epoch_ae_generated_file, "a") as f:
                     max_values, max_indices = torch.max(output, 2)
@@ -253,7 +271,7 @@ class LSTM_VAE(nn.Module):
                         f.write("\n\n")
 
         log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} KL Loss : {:.4f}".format(
-            epoch, total_loss / total_len, total_nll / total_len, total_kl / total_len),
+            epoch, total_loss / total_len, total_nll_loss / total_len, total_kl_loss / total_len),
             log_file, is_print=True)
 
     # mod : Not yet
