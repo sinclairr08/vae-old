@@ -15,6 +15,7 @@ from models.lstmvae import LSTM_VAE
 from models.lstmaae import LSTM_AAE
 from models.lstmarae import LSTM_ARAE
 from models.vqvae import VQ_VAE
+from models.lstmvqvae import LSTM_VQ_VAE
 
 from utils import to_gpu, batchify
 from preprocess import Corpus
@@ -222,7 +223,7 @@ def main(args):
                          save_path=args.save_path, sample_method = 'sampling')
 
     # Case 7 : MNIST with VQ VAE (Need more automization)
-    if args.dataset == 'mnist' and args.model == 'vqvae':
+    elif args.dataset == 'mnist' and args.model == 'vqvae':
         kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
         train_loader = torch.utils.data.DataLoader(
@@ -252,6 +253,35 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
 
+    # Case 8 : SNLI with LSTM_VQ_VAE (Need more automization)
+    elif args.dataset == 'snli' and args.model == 'lstmvqvae':        # mod : bc or other datasets
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_VQ_VAE(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nemb = args.nemb,
+                         nembdim = args.nembdim,
+                         nlayers= args.nlayers,
+                         commit_cost=args.commit_cost,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
+            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+                         save_path=args.save_path, sample_method = 'sampling')
     else:
         raise NotImplementedError
 
@@ -266,7 +296,8 @@ if __name__ == "__main__":
 
     # Data & Model Arguments
     parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist, snli]')
-    parser.add_argument('--model', type=str, default='vqvae', help='model; [vae, aae, arae, lstmvae, lstmaae, vqvae]')
+    parser.add_argument('--model', type=str, default='lstmvqvae', help='model; [vae, aae, arae, lstmvae, lstmaae,'
+                                                                       'vqvae, lstmvqvae]')
     parser.add_argument('--maxlen', type=int, default=30, help='Max length of the sentence; Exceeded words are truncated')
 
     # Model Architecture Arguments
@@ -326,6 +357,9 @@ if __name__ == "__main__":
 
     # VQ VAE - MNIST HYPARAM
     # python3 python3 main.py --model vqvae --dataset mnist --nlatent 64 --nembdim 64 --nemb 512 --ninput 784 --nhidden 400 --lr_ae 1e-3 --commit_cost 1
+
+    # LSTM VQ VAE - SNLI HYPARAM
+    # python3 main.py --model lstmvqvae --dataset snli --nlatent 300 --nembdim 300 --nemb 512
 
     args = parser.parse_args()
     print(vars(args))
