@@ -14,13 +14,14 @@ from models.arae import ARAE
 from models.lstmvae import LSTM_VAE
 from models.lstmaae import LSTM_AAE
 from models.lstmarae import LSTM_ARAE
+from models.vqvae import VQ_VAE
 
 from utils import to_gpu, batchify
 from preprocess import Corpus
 
 def main(args):
 
-    # Case 1 : MNIST with VAE (Need more automization)
+    # Case 1 : MNIST with VAE
     if args.dataset == 'mnist' and args.model == 'vae':
         kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
@@ -48,7 +49,7 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
 
-    # Case 2 : MNIST with AAE (Need more automization)
+    # Case 2 : MNIST with AAE
     elif args.dataset == 'mnist' and args.model == 'aae':
         kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
@@ -82,7 +83,7 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
-    # Case 3 : MNIST with ARAE (Need more automization)
+    # Case 3 : MNIST with ARAE
     elif args.dataset == 'mnist' and args.model == 'arae':
         kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
@@ -119,7 +120,7 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
-    # Case 4 : SNLI with LSTM-VAE (Need more automization)
+    # Case 4 : SNLI with LSTM-VAE
     elif args.dataset == 'snli' and args.model == 'lstmvae':        # mod : bc or other datasets
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
@@ -133,7 +134,7 @@ def main(args):
         Model = LSTM_VAE(enc = 'lstm', dec= 'lstm',
                          nlatent= args.nlatent,
                          ntokens = ntokens,
-                         nemb = args.nemb,
+                         nembdim = args.nembdim,
                          nlayers= args.nlayers,
                          nhidden= args.nhidden,
                          is_gpu = args.cuda)
@@ -148,7 +149,7 @@ def main(args):
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          save_path=args.save_path, sample_method = 'sampling')
 
-    # Case 5 : SNLI with LSTM-AAE (Need more automization)
+    # Case 5 : SNLI with LSTM-AAE
     elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
@@ -162,7 +163,7 @@ def main(args):
         Model = LSTM_AAE(enc = 'lstm', dec= 'lstm',
                          nlatent= args.nlatent,
                          ntokens = ntokens,
-                         nemb = args.nemb,
+                         nembdim = args.nembdim,
                          nlayers= args.nlayers,
                          nDhidden=args.nDhidden,
                          is_gpu = args.cuda)
@@ -182,7 +183,7 @@ def main(args):
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          save_path=args.save_path, sample_method = 'sampling')
 
-    # Case 6 : SNLI with LSTM-ARAE (Need more automization)
+    # Case 6 : SNLI with LSTM-ARAE
     elif args.dataset == 'snli' and args.model == 'lstmarae':        # mod : bc or other datasets
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
@@ -196,7 +197,7 @@ def main(args):
         Model = LSTM_ARAE(enc = 'lstm', dec= 'lstm',
                          nlatent= args.nlatent,
                          ntokens = ntokens,
-                         nemb = args.nemb,
+                         nembdim = args.nembdim,
                          nlayers= args.nlayers,
                          nDhidden=args.nDhidden,
                          nGhidden=args.nGhidden,
@@ -220,6 +221,37 @@ def main(args):
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          save_path=args.save_path, sample_method = 'sampling')
 
+    # Case 7 : MNIST with VQ VAE (Need more automization)
+    if args.dataset == 'mnist' and args.model == 'vqvae':
+        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
+
+        train_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train = True, download=True,
+                           transform = transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle = True, **kwargs
+        )
+
+        test_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('./data', train=False, download=True,
+                           transform=transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle=False, ** kwargs
+        )
+
+        Model = VQ_VAE(nlatent=args.nlatent,
+                    ninput=args.ninput,
+                    nhidden=args.nhidden,
+                    nemb=args.nemb,
+                    nembdim = args.nembdim,
+                    commit_cost=args.commit_cost,
+                    is_gpu = args.cuda)
+        Model = to_gpu(Model, args.cuda)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, optimizer, train_loader, args.log_file)
+            Model.test_epoch(epoch, test_loader, args.log_file)
+            Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
+
     else:
         raise NotImplementedError
 
@@ -234,21 +266,21 @@ if __name__ == "__main__":
 
     # Data & Model Arguments
     parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist, snli]')
-    parser.add_argument('--model', type=str, default='lstmaae', help='model; [vae, aae, arae, lstmvae, lstmaae]')
+    parser.add_argument('--model', type=str, default='vqvae', help='model; [vae, aae, arae, lstmvae, lstmaae, vqvae]')
     parser.add_argument('--maxlen', type=int, default=30, help='Max length of the sentence; Exceeded words are truncated')
 
     # Model Architecture Arguments
     parser.add_argument('--ninput', type=int, default=784, help='The dimension size of input')
-    parser.add_argument('--nemb', type=int, default=300, help='The dimension size of embedding')
+    parser.add_argument('--nembdim', type=int, default=300, help='The dimension size of embedding')
+    parser.add_argument('--nemb', type=int, default=512, help='The number of embeddings for VQ VAE') # mod
     parser.add_argument('--nlatent', type=int, default=120, help='The dimension size of latent')
     parser.add_argument('--nlayers', type=int, default=1, help='The number of layers')
     parser.add_argument('--nhidden', type=int, default=1000, help='The hidden dimension size of LSTM or CNN')
     parser.add_argument('--nvocab', type=int, default=20000, help='The number of vocabulary to use')
     parser.add_argument('--nnoise', type=int, default=100, help='The dimension of noise for ARAE')
 
-    parser.add_argument('--nDhidden', type=int, default=500, help='The dimension of noise for ARAE')
-    parser.add_argument('--nGhidden', type=int, default=500, help='The dimension of noise for ARAE')
-    # Can add - encoder arch, dec arch,
+    parser.add_argument('--nDhidden', type=int, default=500, help='The hidden dimension size of Discriminator')
+    parser.add_argument('--nGhidden', type=int, default=500, help='The hidden dimension size of Generator')
 
     # Training Arguments
     parser.add_argument('--epochs', type=int, default=20, help='The maximum number of epochs')
@@ -258,6 +290,9 @@ if __name__ == "__main__":
     parser.add_argument('--lr_D', type=float, default=5e-5, help='Learning rate of Discriminator')
     parser.add_argument('--lr_G', type=float, default=5e-5, help='Learning rate of Generator')
     parser.add_argument('--anneal_function', type=str, default='logistic', help='kl annealing function; [logistic]') # Add other functions
+    parser.add_argument('--commit_cost', type=float, default=0.25, help='Commitment cost for VQ VAE')
+
+
 
     # File load & Save  Arguments
     parser.add_argument('--save_path', type=str, default=None, help='location to save the trained file & samples')
@@ -288,6 +323,9 @@ if __name__ == "__main__":
 
     # LSTM ARAE - SNLI HYPARAM
     # python3 main.py --model lstmarae --dataset snli --nlatent 300 --nnoise 100  --nDhidden 300 --nGhidden 300
+
+    # VQ VAE - MNIST HYPARAM
+    # python3 python3 main.py --model vqvae --dataset mnist --nlatent 64 --nembdim 64 --nemb 512 --ninput 784 --nhidden 400 --lr_ae 1e-3 --commit_cost 1
 
     args = parser.parse_args()
     print(vars(args))

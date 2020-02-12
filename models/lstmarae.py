@@ -10,7 +10,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from utils import to_gpu, log_line
 
 class LSTM_ARAE(nn.Module):
-    def __init__(self, enc, dec, nlatent, ntokens, nemb,
+    def __init__(self, enc, dec, nlatent, ntokens, nembdim,
                  nlayers, nDhidden, nGhidden, nnoise,
                  is_gpu):
 
@@ -19,7 +19,7 @@ class LSTM_ARAE(nn.Module):
         # Dimesions
         self.nlatent = nlatent
         self.ntokens = ntokens
-        self.nemb = nemb
+        self.nembdim = nembdim
         self.nlayers = nlayers
         self.nhidden = nlatent
         self.nDhidden = nDhidden
@@ -38,7 +38,7 @@ class LSTM_ARAE(nn.Module):
         # mod : dropout
         if self.enc == 'lstm':
             self.encoder = nn.LSTM(
-                input_size=self.nemb,
+                input_size=self.nembdim,
                 hidden_size=self.nhidden,
                 num_layers=self.nlayers,
                 batch_first=True,
@@ -50,7 +50,7 @@ class LSTM_ARAE(nn.Module):
         # mod
         if self.dec == 'lstm':
             self.decoder = nn.LSTM(
-                input_size=self.nemb + self.nhidden,  # Decoder input size
+                input_size=self.nembdim + self.nhidden,  # Decoder input size
                 hidden_size=self.nhidden,
                 num_layers=self.nlayers,
                 batch_first=True,
@@ -77,8 +77,8 @@ class LSTM_ARAE(nn.Module):
         self.eps = 1e-15
 
         # Layers
-        self.embedding_enc = nn.Embedding(self.ntokens, nemb)
-        self.embedding_dec = nn.Embedding(self.ntokens, nemb)
+        self.embedding_enc = nn.Embedding(self.ntokens, nembdim)
+        self.embedding_dec = nn.Embedding(self.ntokens, nembdim)
 
         self.hidden2token = nn.Linear(self.nhidden, self.ntokens)
 

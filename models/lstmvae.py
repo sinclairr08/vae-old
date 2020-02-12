@@ -10,7 +10,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from utils import to_gpu, log_line
 
 class LSTM_VAE(nn.Module):
-    def __init__(self, enc, dec, nlatent, ntokens, nemb,
+    def __init__(self, enc, dec, nlatent, ntokens, nembdim,
                  nlayers, nhidden,
                  is_gpu):
 
@@ -19,7 +19,7 @@ class LSTM_VAE(nn.Module):
         # Dimesions
         self.nlatent = nlatent
         self.ntokens = ntokens
-        self.nemb = nemb
+        self.nembdim = nembdim
         self.nlayers = nlayers
         self.nhidden = nhidden
 
@@ -37,7 +37,7 @@ class LSTM_VAE(nn.Module):
         # mod : dropout
         if self.enc == 'lstm':
             self.encoder = nn.LSTM(
-                input_size=self.nemb,
+                input_size=self.nembdim,
                 hidden_size=self.nhidden,
                 num_layers=self.nlayers,
                 batch_first=True,
@@ -49,7 +49,7 @@ class LSTM_VAE(nn.Module):
         # mod
         if self.dec == 'lstm':
             self.decoder = nn.LSTM(
-                input_size=self.nemb + self.nhidden,  # Decoder input size
+                input_size=self.nembdim + self.nhidden,  # Decoder input size
                 hidden_size=self.nhidden,
                 num_layers=self.nlayers,
                 batch_first=True,
@@ -59,8 +59,8 @@ class LSTM_VAE(nn.Module):
             raise NotImplementedError
 
         # Layers
-        self.embedding_enc = nn.Embedding(self.ntokens, nemb)
-        self.embedding_dec = nn.Embedding(self.ntokens, nemb)
+        self.embedding_enc = nn.Embedding(self.ntokens, nembdim)
+        self.embedding_dec = nn.Embedding(self.ntokens, nembdim)
 
         self.hidden2mean = nn.Linear(self.nhidden, self.nlatent)
         self.hidden2logvar = nn.Linear(self.nhidden, self.nlatent)
