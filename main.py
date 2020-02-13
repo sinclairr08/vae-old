@@ -5,6 +5,9 @@ import random
 import numpy as np
 import torch
 import torch.utils.data
+import nltk
+
+
 from torch import optim
 from torchvision import datasets, transforms
 
@@ -123,6 +126,7 @@ def main(args):
 
     # Case 4 : SNLI with LSTM-VAE
     elif args.dataset == 'snli' and args.model == 'lstmvae':        # mod : bc or other datasets
+        nltk.download("book")
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
                         vocab_size=args.nvocab,
@@ -148,10 +152,11 @@ def main(args):
             Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
 
     # Case 5 : SNLI with LSTM-AAE
     elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
+        nltk.download("book")
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
                         vocab_size=args.nvocab,
@@ -182,10 +187,11 @@ def main(args):
             Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
 
     # Case 6 : SNLI with LSTM-ARAE
     elif args.dataset == 'snli' and args.model == 'lstmarae':        # mod : bc or other datasets
+        nltk.download("book")
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
                         vocab_size=args.nvocab,
@@ -220,7 +226,7 @@ def main(args):
             Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
 
     # Case 7 : MNIST with VQ VAE (Need more automization)
     elif args.dataset == 'mnist' and args.model == 'vqvae':
@@ -255,6 +261,7 @@ def main(args):
 
     # Case 8 : SNLI with LSTM_VQ_VAE (Need more automization)
     elif args.dataset == 'snli' and args.model == 'lstmvqvae':        # mod : bc or other datasets
+        nltk.download("book")
         corpus = Corpus('./data/snli',
                         maxlen=args.maxlen,
                         vocab_size=args.nvocab,
@@ -281,7 +288,7 @@ def main(args):
             Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
     else:
         raise NotImplementedError
 

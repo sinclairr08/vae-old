@@ -6,6 +6,10 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction # To calculate BLEU score
+
+from metrics.uniquegram import UniqueGram
+from metrics.selfbleu import SelfBleu
 
 from utils import to_gpu, log_line
 
@@ -236,6 +240,13 @@ class LSTM_AAE(nn.Module):
         total_adv = 0
         total_len = 0
 
+        avg_bleu1 = 0
+        avg_bleu2 = 0
+        avg_bleu3 = 0
+        avg_bleu4 = 0
+        avg_bleu5 = 0
+        cc = SmoothingFunction()
+
         epoch_ae_generated_file = os.path.join(save_path, "epoch_" + str(epoch) + "_ae_generation.txt")
 
         with torch.no_grad():
@@ -261,19 +272,45 @@ class LSTM_AAE(nn.Module):
                         chars = " ".join([idx2word[x] for x in t])
                         f.write(chars)
                         f.write("\n")
+                        reference = chars.split()
 
                         # autoencoder output sentence
                         chars = " ".join([idx2word[x] for x in idx])
                         f.write(chars)
                         f.write("\n\n")
+                        candidate = chars.split()
+
+                        gram1 = sentence_bleu([reference], candidate, smoothing_function=cc.method1,
+                                              weights=(1, 0, 0, 0, 0), auto_reweigh=True)
+                        gram2 = sentence_bleu([reference], candidate, smoothing_function=cc.method1,
+                                              weights=(1 / 2, 1 / 2, 0, 0, 0), auto_reweigh=True)
+                        gram3 = sentence_bleu([reference], candidate, smoothing_function=cc.method1,
+                                              weights=(1 / 3, 1 / 3, 1 / 3, 0, 0), auto_reweigh=True)
+                        gram4 = sentence_bleu([reference], candidate, smoothing_function=cc.method1,
+                                              weights=(1 / 4, 1 / 4, 1 / 4, 1 / 4, 0), auto_reweigh=True)
+                        gram5 = sentence_bleu([reference], candidate, smoothing_function=cc.method1,
+                                              weights=(1 / 5, 1 / 5, 1 / 5, 1 / 5, 1 / 5), auto_reweigh=True)
+
+                        avg_bleu1 += gram1
+                        avg_bleu2 += gram2
+                        avg_bleu3 += gram3
+                        avg_bleu4 += gram4
+                        avg_bleu5 += gram5
 
         total_loss = total_nll + total_adv
         log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} Adv Loss : {:.4f}".format(
             epoch, total_loss / total_len, total_nll / total_len, total_adv / total_len),
             log_file, is_print=True)
 
+        log_line("BLEU-1: {:.3f}".format((avg_bleu1 / total_len) * 100), log_file,is_print=True)
+        log_line("BLEU-2: {:.3f}".format((avg_bleu2 / total_len) * 100), log_file, is_print=True)
+        log_line("BLEU-3: {:.3f}".format((avg_bleu3 / total_len) * 100), log_file, is_print=True)
+        log_line("BLEU-4: {:.3f}".format((avg_bleu4 / total_len) * 100), log_file, is_print=True)
+        log_line("BLEU-5: {:.3f}".format((avg_bleu5 / total_len) * 100), log_file, is_print=True)
+
+
     # mod : Not yet
-    def sample(self, epoch, sample_num, maxlen, idx2word, save_path, sample_method='sampling'):
+    def sample(self, epoch, sample_num, maxlen, idx2word, log_file, save_path, sample_method='sampling'):
         random_noise = to_gpu(torch.randn(sample_num, self.nhidden), self.is_gpu)
 
         start_symbols = to_gpu(Variable(torch.ones(sample_num, 1).long()), self.is_gpu)
@@ -336,5 +373,29 @@ class LSTM_AAE(nn.Module):
 
             log_line(sentence, sampling_file, is_print=False)
             sentences.append(sentence)
+
+        selfbleu1 = SelfBleu(test_text=sampling_file, gram=1).get_score()
+        selfbleu2 = SelfBleu(test_text=sampling_file, gram=2).get_score()
+        selfbleu3 = SelfBleu(test_text=sampling_file, gram=3).get_score()
+        selfbleu4 = SelfBleu(test_text=sampling_file, gram=4).get_score()
+        selfbleu5 = SelfBleu(test_text=sampling_file, gram=5).get_score()
+
+        dist1 = UniqueGram(test_text=sampling_file, gram=1).get_score()
+        dist2 = UniqueGram(test_text=sampling_file, gram=2).get_score()
+        dist3 = UniqueGram(test_text=sampling_file, gram=3).get_score()
+        dist4 = UniqueGram(test_text=sampling_file, gram=4).get_score()
+        dist5 = UniqueGram(test_text=sampling_file, gram=5).get_score()
+
+        log_line('Self-BLEU 1: {:.3f}'.format(selfbleu1 * 100), log_file, is_print=True)
+        log_line('Self-BLEU 2: {:.3f}'.format(selfbleu2 * 100), log_file, is_print=True)
+        log_line('Self-BLEU 3: {:.3f}'.format(selfbleu3 * 100), log_file, is_print=True)
+        log_line('Self-BLEU 4: {:.3f}'.format(selfbleu4 * 100), log_file, is_print=True)
+        log_line('Self-BLEU 5: {:.3f}'.format(selfbleu5 * 100), log_file, is_print=True)
+
+        log_line('Dist 1: {:.3f}'.format(dist1), log_file, is_print=True)
+        log_line('Dist 2: {:.3f}'.format(dist2), log_file, is_print=True)
+        log_line('Dist 3: {:.3f}'.format(dist3), log_file, is_print=True)
+        log_line('Dist 4: {:.3f}'.format(dist4), log_file, is_print=True)
+        log_line('Dist 5: {:.3f}'.format(dist5), log_file, is_print=True)
 
         return
