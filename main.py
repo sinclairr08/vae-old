@@ -22,6 +22,7 @@ from models.lstmvqvae import LSTM_VQ_VAE
 
 from utils import to_gpu, batchify
 from preprocess import Corpus
+from config import config_args
 
 def main(args):
 
@@ -81,8 +82,18 @@ def main(args):
         optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
         optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
 
+        if args.niters_gan_schedule is not None:
+            gan_schedule = [int(x) for x in args.niters_gan_schedule.split("-")]
+        else:
+            gan_schedule = []
+
+        niters_gan = 1
+
         for epoch in range(1, args.epochs + 1):
+            if epoch in gan_schedule:
+                niters_gan += 1
             Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
+                              niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_ae,
                               args.log_file)
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
@@ -118,117 +129,24 @@ def main(args):
         optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
         optim_gen = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_G)
 
+        if args.niters_gan_schedule is not None:
+            gan_schedule = [int(x) for x in args.niters_gan_schedule.split("-")]
+        else:
+            gan_schedule = []
+
+        niters_gan = 1
+
         for epoch in range(1, args.epochs + 1):
+            if epoch in gan_schedule:
+                niters_gan += 1
             Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
+                              niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_g, args.niters_gan_ae,
                               args.log_file)
+
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
-    # Case 4 : SNLI with LSTM-VAE
-    elif args.dataset == 'snli' and args.model == 'lstmvae':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
-
-        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
-
-        Model = LSTM_VAE(enc = 'lstm', dec= 'lstm',
-                         nlatent= args.nlatent,
-                         ntokens = ntokens,
-                         nembdim = args.nembdim,
-                         nlayers= args.nlayers,
-                         nhidden= args.nhidden,
-                         is_gpu = args.cuda)
-
-        Model = to_gpu(Model, args.cuda)
-        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
-
-        for epoch in range(1, args.epochs + 1):
-            Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
-            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
-                             args.save_path)
-            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
-
-    # Case 5 : SNLI with LSTM-AAE
-    elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
-
-        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
-
-        Model = LSTM_AAE(enc = 'lstm', dec= 'lstm',
-                         nlatent= args.nlatent,
-                         ntokens = ntokens,
-                         nembdim = args.nembdim,
-                         nlayers= args.nlayers,
-                         nDhidden=args.nDhidden,
-                         is_gpu = args.cuda)
-
-        Model = to_gpu(Model, args.cuda)
-
-        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
-        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
-        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
-        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
-
-        for epoch in range(1, args.epochs + 1):
-            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
-                              args.log_file, args.log_interval)
-            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
-                             args.save_path)
-            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
-
-    # Case 6 : SNLI with LSTM-ARAE
-    elif args.dataset == 'snli' and args.model == 'lstmarae':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
-
-        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
-
-        Model = LSTM_ARAE(enc = 'lstm', dec= 'lstm',
-                         nlatent= args.nlatent,
-                         ntokens = ntokens,
-                         nembdim = args.nembdim,
-                         nlayers= args.nlayers,
-                         nDhidden=args.nDhidden,
-                         nGhidden=args.nGhidden,
-                         nnoise= args.nnoise,
-                         is_gpu = args.cuda)
-
-        Model = to_gpu(Model, args.cuda)
-
-
-        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
-        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
-        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
-        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
-        optim_gen = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_G)
-
-        for epoch in range(1, args.epochs + 1):
-            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
-                              args.log_file, args.log_interval)
-            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
-                             args.save_path)
-            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
-
-    # Case 7 : MNIST with VQ VAE (Need more automization)
+    # Case 4 : MNIST with VQ VAE (Need more automization)
     elif args.dataset == 'mnist' and args.model == 'vqvae':
         kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
@@ -258,6 +176,129 @@ def main(args):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file)
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
+
+    # Case 5 : SNLI with LSTM-VAE
+    elif args.dataset == 'snli' and args.model == 'lstmvae':        # mod : bc or other datasets
+        nltk.download("book")
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_VAE(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nembdim = args.nembdim,
+                         nlayers= args.nlayers,
+                         nhidden= args.nhidden,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
+            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+
+    # Case 6 : SNLI with LSTM-AAE
+    elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
+        nltk.download("book")
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_AAE(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nembdim = args.nembdim,
+                         nlayers= args.nlayers,
+                         nDhidden=args.nDhidden,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+
+        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
+        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
+        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
+        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
+
+        if args.niters_gan_schedule is not None:
+            gan_schedule = [int(x) for x in args.niters_gan_schedule.split("-")]
+        else:
+            gan_schedule = []
+
+        niters_gan = 1
+
+        for epoch in range(1, args.epochs + 1):
+            if epoch in gan_schedule:
+                niters_gan += 1
+            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
+                              niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_ae,
+                              args.log_file, args.log_interval)
+            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+
+    # Case 7 : SNLI with LSTM-ARAE
+    elif args.dataset == 'snli' and args.model == 'lstmarae':        # mod : bc or other datasets
+        nltk.download("book")
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_ARAE(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nembdim = args.nembdim,
+                         nlayers= args.nlayers,
+                         nDhidden=args.nDhidden,
+                         nGhidden=args.nGhidden,
+                         nnoise= args.nnoise,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+
+        optim_enc_nll = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_ae)
+        optim_enc_adv = torch.optim.Adam(Model.encoder.parameters(), lr=args.lr_adv)
+        optim_dec = torch.optim.Adam(Model.decoder.parameters(), lr=args.lr_ae)
+        optim_disc = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_D)
+        optim_gen = torch.optim.Adam(Model.disc.parameters(), lr=args.lr_G)
+
+        if args.niters_gan_schedule is not None:
+            gan_schedule = [int(x) for x in args.niters_gan_schedule.split("-")]
+        else:
+            gan_schedule = []
+
+        niters_gan = 1
+
+        for epoch in range(1, args.epochs + 1):
+            if epoch in gan_schedule:
+                niters_gan += 1
+            Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
+                              niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_g, args.niters_gan_ae,
+                              args.log_file, args.log_interval)
+            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
 
     # Case 8 : SNLI with LSTM_VQ_VAE (Need more automization)
     elif args.dataset == 'snli' and args.model == 'lstmvqvae':        # mod : bc or other datasets
@@ -316,7 +357,6 @@ if __name__ == "__main__":
     parser.add_argument('--nhidden', type=int, default=1000, help='The hidden dimension size of LSTM or CNN')
     parser.add_argument('--nvocab', type=int, default=20000, help='The number of vocabulary to use')
     parser.add_argument('--nnoise', type=int, default=100, help='The dimension of noise for ARAE')
-
     parser.add_argument('--nDhidden', type=int, default=500, help='The hidden dimension size of Discriminator')
     parser.add_argument('--nGhidden', type=int, default=500, help='The hidden dimension size of Generator')
 
@@ -329,8 +369,11 @@ if __name__ == "__main__":
     parser.add_argument('--lr_G', type=float, default=5e-5, help='Learning rate of Generator')
     parser.add_argument('--anneal_function', type=str, default='logistic', help='kl annealing function; [logistic]') # Add other functions
     parser.add_argument('--commit_cost', type=float, default=0.25, help='Commitment cost for VQ VAE')
-
-
+    parser.add_argument('--niters_ae', type=int, default=1, help='The number of iteration for ae')
+    parser.add_argument('--niters_gan_d', type=int, default=1, help='The number of iteration for discriminator')
+    parser.add_argument('--niters_gan_g', type=int, default=1, help='The number of iteration for generator')
+    parser.add_argument('--niters_gan_ae', type=int, default=1, help='The number of iteration for ae using gan')
+    parser.add_argument('--niters_gan_schedule', type=str, default='2-4-6', help='GAN SCHEDULE')
 
     # File load & Save  Arguments
     parser.add_argument('--save_path', type=str, default=None, help='location to save the trained file & samples')
@@ -338,37 +381,15 @@ if __name__ == "__main__":
 
     # Utilty Arguments # mod : is it really need?
     parser.add_argument('--lowercase', action='store_true',help='lowercase all text')
+    parser.add_argument('--config', type = int, default= None, help='default configuartion for each number')
 
     # Could add another arguments
 
-
-    # GUIDELINE for best hparams
-    # VAE - MNIST HYPARAM
-    # python3 main.py --model vae --dataset mnist --ninput 784 --nlatent 20 --nhidden 400 --lr_ae 1e-3
-
-    # AAE - MNIST HYPARAM
-    # python3 main.py --model aae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000 --nDhidden 500
-    # lr ae = 1e-04 lr disc 5e-05
-
-    # ARAE - MNIST HYPARAM
-    # python3 main.py --model arae --dataset mnist --ninput 784 --nlatent 120 --nhidden 1000  --nDhidden 500 --nGhidden 500
-
-    # LSTM VAE - SNLI HYPARAM
-    # python3 main.py --model lstmvae --dataset snli --nlatent 300 --nhidden 300
-
-    # LSTM AAE - SNLI HYPARAM
-    # python3 main.py --model lstmaae --dataset snli --nlatent 300  --nDhidden 300
-
-    # LSTM ARAE - SNLI HYPARAM
-    # python3 main.py --model lstmarae --dataset snli --nlatent 300 --nnoise 100  --nDhidden 300 --nGhidden 300
-
-    # VQ VAE - MNIST HYPARAM
-    # python3 python3 main.py --model vqvae --dataset mnist --nlatent 64 --nembdim 64 --nemb 512 --ninput 784 --nhidden 400 --lr_ae 1e-3 --commit_cost 1
-
-    # LSTM VQ VAE - SNLI HYPARAM
-    # python3 main.py --model lstmvqvae --dataset snli --nlatent 300 --nembdim 300 --nemb 512
+    #{1 : VAE MNIST, 2: AAE MNIST, 3: ARAE MNIST, 4: VQ VAE MNIST, 5: LSTM VAE SNLI, 6: LSTM AAE SNLI, 7: LSTM ARAE SNLI, 8: LSTM VQ VAE SNLI}
 
     args = parser.parse_args()
+    if args.config is not None:
+        args = config_args(args, args.config)
     print(vars(args))
 
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID" # so the IDs match nvidia-smi

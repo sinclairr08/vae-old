@@ -183,7 +183,8 @@ class LSTM_AAE(nn.Module):
         loss = -torch.mean(torch.log(disc_fake + self.eps))
         return loss
 
-    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, log_file, log_interval):
+    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
+                    niters_gan, niters_ae, niters_gan_d, niters_gan_ae, log_file, log_interval):
         self.train()
         total_nll = 0
         total_adv = 0
@@ -194,35 +195,40 @@ class LSTM_AAE(nn.Module):
             source = to_gpu(Variable(source), self.is_gpu)
             target = to_gpu(Variable(target), self.is_gpu)
 
-            optim_enc_nll.zero_grad()
-            optim_enc_adv.zero_grad()
-            optim_dec.zero_grad()
-            optim_disc.zero_grad()
-
-            output = self.forward(source, lengths)
-
             # Phase 1 : Train Autoencoder
-            nll_loss = self.nll_loss(output, target)
-            nll_loss.backward()
-            total_nll += nll_loss.item()
+            for i in range(niters_ae):
+                optim_enc_nll.zero_grad()
+                optim_dec.zero_grad()
+                output = self.forward(source, lengths)
 
-            # mod : Argumentization of the clip
-            torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1)
-            optim_enc_nll.step()
-            optim_dec.step()
+                nll_loss = self.nll_loss(output, target)
+                nll_loss.backward()
+                total_nll += nll_loss.item()
 
-            latent_fake = self.encode(source, lengths)
-            latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
+                # mod : Argumentization of the clip
+                torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1)
+                optim_enc_nll.step()
+                optim_dec.step()
 
-            disc_loss = self.disc_loss(latent_real, latent_fake)
-            disc_loss.backward()
-            optim_disc.step()
+            for j in range(niters_gan):
 
-            # Phase 3 : Train encoder
-            adv_loss = self.adv_loss(source, lengths)
-            adv_loss.backward()
-            total_adv += adv_loss.item()
-            optim_enc_adv.step()
+                # Phase 2 : Train Discriminator
+                latent_fake = self.encode(source, lengths)
+                for k in range(niters_gan_d):
+                    optim_disc.zero_grad()
+                    latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
+
+                    disc_loss = self.disc_loss(latent_real, latent_fake)
+                    disc_loss.backward()
+                    optim_disc.step()
+
+                # Phase 3 : Train encoder
+                for k in range(niters_gan_ae):
+                    optim_enc_adv.zero_grad()
+                    adv_loss = self.adv_loss(source, lengths)
+                    adv_loss.backward()
+                    total_adv += adv_loss.item()
+                    optim_enc_adv.step()
 
             if batch_idx % log_interval == 0 and batch_idx > 0:
                 pass

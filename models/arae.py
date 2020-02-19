@@ -114,7 +114,8 @@ class ARAE(nn.Module):
         loss = -torch.mean(torch.log(disc_fake + self.eps))
         return loss
 
-    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen, log_file):
+    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
+                    niters_gan, niters_ae, niters_gan_d, niters_gan_g, niters_gan_ae, log_file):
         self.train()
 
         total_nll_loss = 0
@@ -123,44 +124,50 @@ class ARAE(nn.Module):
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
 
-            optim_enc_nll.zero_grad()
-            optim_enc_adv.zero_grad()
-            optim_dec.zero_grad()
-            optim_disc.zero_grad()
-            optim_gen.zero_grad()
-
             # Phase 1 : Train Autoencoder
-            output, _ = self.forward(data)
+            for i in range(niters_ae):
+                optim_enc_nll.zero_grad()
+                optim_dec.zero_grad()
 
-            nll_loss = self.nll_loss(data, output)  # Need to check the names
-            nll_loss.backward()
-            total_nll_loss += nll_loss.item()
-            optim_enc_nll.step()
-            optim_dec.step()
+                output, _ = self.forward(data)
 
-            # Phase 2 : Train Discriminator
-            latent_real = self.encode(data)
-            random_noise = to_gpu(Variable(torch.randn(latent_real.shape[0], self.nnoise)),
-                                  self.is_gpu)
-            latent_fake = self.gen(random_noise)
+                nll_loss = self.nll_loss(data, output)  # Need to check the names
+                nll_loss.backward()
+                total_nll_loss += nll_loss.item()
+                optim_enc_nll.step()
+                optim_dec.step()
 
-            disc_loss = self.disc_loss(latent_real, latent_fake)
-            disc_loss.backward()
-            optim_disc.step()
+            for j in range(niters_gan):
 
-            # Phase 3 : Train encoder using discriminator
-            adv_loss_enc = self.adv_loss_enc(data)
-            adv_loss_enc.backward()
-            total_adv_loss += adv_loss_enc.item()
-            optim_enc_adv.step()
+                # Phase 2 : Train Discriminator
+                latent_real = self.encode(data)
+                for k in range(niters_gan_d):
+                    optim_disc.zero_grad()
+                    random_noise = to_gpu(Variable(torch.randn(latent_real.shape[0], self.nnoise)),
+                                          self.is_gpu)
+                    latent_fake = self.gen(random_noise)
 
-            # Phase 4 : Train generator using discriminator
-            random_noise = to_gpu(Variable(torch.randn(latent_real.shape[0], self.nnoise)),
-                                  self.is_gpu)
-            latent_fake = self.gen(random_noise)
-            adv_loss_gen = self.adv_loss_gen(latent_fake)
-            adv_loss_gen.backward()
-            optim_gen.step()
+                    disc_loss = self.disc_loss(latent_real, latent_fake)
+                    disc_loss.backward()
+                    optim_disc.step()
+
+                # Phase 3 : Train encoder using discriminator
+                for k in range(niters_gan_ae):
+                    optim_enc_adv.zero_grad()
+                    adv_loss_enc = self.adv_loss_enc(data)
+                    adv_loss_enc.backward()
+                    total_adv_loss += adv_loss_enc.item()
+                    optim_enc_adv.step()
+
+                # Phase 4 : Train generator using discriminator
+                for k in range(niters_gan_g):
+                    optim_gen.zero_grad()
+                    random_noise = to_gpu(Variable(torch.randn(latent_real.shape[0], self.nnoise)),
+                                          self.is_gpu)
+                    latent_fake = self.gen(random_noise)
+                    adv_loss_gen = self.adv_loss_gen(latent_fake)
+                    adv_loss_gen.backward()
+                    optim_gen.step()
 
         total_loss = total_nll_loss + total_adv_loss
         total_len = len(train_loader.dataset)

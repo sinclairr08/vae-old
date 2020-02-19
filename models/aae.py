@@ -97,7 +97,8 @@ class AAE(nn.Module):
         loss = -torch.mean(torch.log(disc_fake + self.eps))
         return loss
 
-    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, log_file):
+    def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
+                    niters_gan, niters_ae, niters_gan_d, niters_gan_ae, log_file):
         self.train()
 
         total_nll_loss = 0
@@ -106,33 +107,37 @@ class AAE(nn.Module):
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
 
-            optim_enc_nll.zero_grad()
-            optim_enc_adv.zero_grad()
-            optim_dec.zero_grad()
-            optim_disc.zero_grad()
-
             # Phase 1 : Train Autoencoder
-            output, _ = self.forward(data)
+            for i in range(niters_ae):
+                optim_enc_nll.zero_grad()
+                optim_dec.zero_grad()
+                output, _ = self.forward(data)
 
-            nll_loss = self.nll_loss(data, output)  # Need to check the names
-            nll_loss.backward()
-            total_nll_loss += nll_loss.item()
-            optim_enc_nll.step()
-            optim_dec.step()
+                nll_loss = self.nll_loss(data, output)  # Need to check the names
+                nll_loss.backward()
+                total_nll_loss += nll_loss.item()
+                optim_enc_nll.step()
+                optim_dec.step()
 
-            # Phase 2 : Train Discriminator
-            latent_fake = self.encode(data)
-            latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
+            for j in range(niters_gan):
 
-            disc_loss = self.disc_loss(latent_real, latent_fake)
-            disc_loss.backward()
-            optim_disc.step()
+                # Phase 2 : Train Discriminator
+                latent_fake = self.encode(data)
+                for k in range(niters_gan_d):
+                    optim_disc.zero_grad()
+                    latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
 
-            # Phase 3 : Train encoder
-            adv_loss = self.adv_loss(data)
-            adv_loss.backward()
-            total_adv_loss += adv_loss.item()
-            optim_enc_adv.step()
+                    disc_loss = self.disc_loss(latent_real, latent_fake)
+                    disc_loss.backward()
+                    optim_disc.step()
+
+                # Phase 3 : Train encoder
+                for k in range(niters_gan_ae):
+                    optim_enc_adv.zero_grad()
+                    adv_loss = self.adv_loss(data)
+                    adv_loss.backward()
+                    total_adv_loss += adv_loss.item()
+                    optim_enc_adv.step()
 
         total_loss = total_nll_loss + total_adv_loss
         total_len = len(train_loader.dataset)

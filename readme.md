@@ -10,7 +10,18 @@ $ pip install -r requirements.txt
 ```
 * Run the model (VAE)
 ```
-$ python3 main.py --model vae --dataset mnist --ninput 784 --nlatent 20 --nhidden 400
+$ python3 main.py --config 1
+```
+* Configuration number (--config #)
+```
+1 : VAE MNIST
+2: AAE MNIST
+3: ARAE MNIST
+4: VQ VAE MNIST
+5: LSTM VAE SNLI
+6: LSTM AAE SNLI
+7: LSTM ARAE SNLI
+8: LSTM VQ VAE SNLI
 ```
 
 
