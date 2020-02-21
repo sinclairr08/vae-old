@@ -28,31 +28,57 @@ $ python3 main.py --config 1
 ## Examples (MNIST data)
 * VAE (Image)
 
-  ![VAE_epoch1](./outputs/vae/mnist/epoch_1.png)
+  ![VAE_epoch1](./upload_image/vae_mnist_epoch_1.png)
  
   ##### epoch 1
  
-  ![VAE_epoch10](./outputs/vae/mnist/epoch_10.png)
+  ![VAE_epoch20](./upload_image/vae_mnist_epoch_20.png)
   
-  ##### epoch 10
+  ##### epoch 20
 
 * AAE (Image)
 
-  ![AAE_epoch1](./outputs/aae/mnist/epoch_1.png)
+  ![AAE_epoch1](./upload_image/aae_mnist_epoch_1.png)
  
   ##### epoch 1
  
-  ![AAE_epoch20](./outputs/aae/mnist/epoch_20.png)
+  ![AAE_epoch20](./upload_image/aae_mnist_epoch_20.png)
   
   ##### epoch 20
   
 * ARAE (Image)
 
-  ![ARAE_epoch1](./outputs/arae/mnist/epoch_1.png)
+  ![ARAE_epoch1](./upload_image/arae_mnist_epoch_1.png)
  
   ##### epoch 1
  
-  ![ARAE_epoch20](./outputs/arae/mnist/epoch_20.png)
+  ![ARAE_epoch20](./upload_image/arae_mnist_epoch_20.png)
+  
+  ##### epoch 20
+  
+  * VQ VAE (Image)
+
+  ![VQVAE_epoch1](./upload_image/vqvae_mnist_epoch_1.png)
+ 
+  ##### epoch 1
+  
+  ![VQVAE_epoch2](./upload_image/vqvae_mnist_epoch_2.png)
+ 
+  ##### epoch 2
+  
+  ![VQVAE_epoch3](./upload_image/vqvae_mnist_epoch_3.png)
+ 
+  ##### epoch 3
+  
+  ![VQVAE_epoch4](./upload_image/vqvae_mnist_epoch_4.png)
+ 
+  ##### epoch 4
+  
+  ![VQVAE_epoch5](./upload_image/vqvae_mnist_epoch_5.png)
+ 
+  ##### epoch 5
+ 
+  ![VQVAE_epoch20](./upload_image/vqvae_mnist_epoch_20.png)
   
   ##### epoch 20
 
