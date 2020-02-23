@@ -50,7 +50,7 @@ def config_args(args, conf):
         args.dataset = 'snli'
         args.nlatent = 300
         args.nDhidden = 300
-
+        args.niters_gan_d = 5
 
     elif conf == 7:
         args.model = 'lstmarae'
@@ -59,6 +59,7 @@ def config_args(args, conf):
         args.nnoise = 100
         args.nDhidden = 300
         args.nGhidden = 300
+        args.niters_gan_d = 5
 
     elif conf == 8:
         args.model = 'lstmvqvae'

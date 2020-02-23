@@ -80,6 +80,7 @@ class AAE(nn.Module):
 
         return loss
 
+    # deprecate
     def disc_loss(self, latent_real, latent_fake):
         assert latent_real.shape == latent_fake.shape
 
@@ -90,6 +91,7 @@ class AAE(nn.Module):
 
         return loss
 
+    # deprecate
     def adv_loss(self, input):
         latent_fake = self.encode(input)
         disc_fake = self.disc(latent_fake)
@@ -101,11 +103,15 @@ class AAE(nn.Module):
                     niters_gan, niters_ae, niters_gan_d, niters_gan_ae, log_file):
         self.train()
 
-        total_nll_loss = 0
-        total_adv_loss = 0
+        total_nll = 0
+        total_err_adv = 0
+        total_errD = 0
 
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
+
+            one = to_gpu(torch.Tensor(len(data), 1).fill_(1), self.is_gpu)
+            mone = one * -1
 
             # Phase 1 : Train Autoencoder
             for i in range(niters_ae):
@@ -115,40 +121,59 @@ class AAE(nn.Module):
 
                 nll_loss = self.nll_loss(data, output)  # Need to check the names
                 nll_loss.backward()
-                total_nll_loss += nll_loss.item()
+                total_nll += nll_loss.item()
                 optim_enc_nll.step()
                 optim_dec.step()
 
             for j in range(niters_gan):
 
                 # Phase 2 : Train Discriminator
-                latent_fake = self.encode(data)
                 for k in range(niters_gan_d):
                     optim_disc.zero_grad()
+                    '''
+                    latent_fake = self.encode(data)
                     latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
 
                     disc_loss = self.disc_loss(latent_real, latent_fake)
                     disc_loss.backward()
+                    '''
+                    latent_fake = self.encode(data)
+                    latent_real = to_gpu(Variable(torch.randn_like(latent_fake)), self.is_gpu)
+
+                    errD_fake = self.disc(latent_fake.detach())
+                    errD_real = self.disc(latent_real.detach())
+
+                    errD_fake.backward(mone)
+                    errD_real.backward(one)
+
+                    errD = -(errD_real - errD_fake)
+                    total_errD += torch.sum(errD).item()
+
                     optim_disc.step()
 
                 # Phase 3 : Train encoder
                 for k in range(niters_gan_ae):
                     optim_enc_adv.zero_grad()
+                    '''
                     adv_loss = self.adv_loss(data)
                     adv_loss.backward()
-                    total_adv_loss += adv_loss.item()
+                    total_adv += adv_loss.item()
+                    '''
+                    latent_fake = self.encode(data)
+                    err_adv = self.disc(latent_fake)
+
+                    err_adv.backward(one)
+                    total_err_adv += torch.sum(err_adv).item()
                     optim_enc_adv.step()
 
-        total_loss = total_nll_loss + total_adv_loss
         total_len = len(train_loader.dataset)
-        log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} Adv Loss : {:.4f}".format(
-            epoch, total_loss / total_len, total_nll_loss / total_len,
-                   total_adv_loss / total_len), log_file, is_print=True)
+        log_line("Epoch {} Train NLL Loss : {:.4f} Disc Loss : {:.4f} Adv Val : {:.4f}".format(
+            epoch, total_nll / total_len, total_errD / total_len, total_err_adv / total_len), log_file, is_print=True)
 
     def test_epoch(self, epoch, test_loader, log_file):
         self.eval()
-        total_nll_loss = 0
-        total_adv_loss = 0
+        total_nll = 0
+        total_err_adv = 0
 
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(test_loader):
@@ -156,16 +181,16 @@ class AAE(nn.Module):
                 output, _ = self.forward(data)
 
                 nll_loss = self.nll_loss(data, output)
-                total_nll_loss += nll_loss.item()
+                total_nll += nll_loss.item()
 
-                adv_loss = self.adv_loss(data)
-                total_adv_loss += adv_loss.item()
+                latent_fake = self.encode(data)
+                err_adv = self.disc(latent_fake)
 
-        total_loss = total_nll_loss + total_adv_loss
+                total_err_adv += torch.sum(err_adv).item()
+
         total_len = len(test_loader.dataset)
-        log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} Adv Loss : {:.4f}".format(
-            epoch, total_loss / total_len, total_nll_loss / total_len,
-                   total_adv_loss / total_len), log_file, is_print=True)
+        log_line("Epoch {} Test NLL Loss : {:.4f} Adv Val : {:.4f}".format(
+            epoch, total_nll / total_len, total_err_adv / total_len), log_file, is_print=True)
 
     def sample(self, epoch, sample_num, save_path):
         with torch.no_grad():
