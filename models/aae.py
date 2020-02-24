@@ -53,7 +53,6 @@ class AAE(nn.Module):
             nn.Linear(self.nDhidden, self.nDhidden),
             nn.ReLU(),
             nn.Linear(self.nDhidden, 1),
-            torch.nn.Sigmoid()
         )
 
         # Epsilon to prevent 0

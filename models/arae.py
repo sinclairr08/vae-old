@@ -51,20 +51,20 @@ class ARAE(nn.Module):
 
         # Discriminator
         self.disc = nn.Sequential(
-            nn.Linear(self.nlatent, 500),
+            nn.Linear(self.nlatent, self.nDhidden),
             nn.ReLU(),
-            nn.Linear(500, 500),
+            nn.Linear(self.nDhidden, self.nDhidden),
             nn.ReLU(),
-            nn.Linear(500, 1),
-            nn.Sigmoid()
+            nn.Linear(self.nDhidden, 1),
         )
 
         # Generator
         self.gen = nn.Sequential(
-            nn.Linear(self.nnoise, 500),
+            nn.Linear(self.nnoise, self.nGhidden),
             nn.ReLU(),
-            nn.Linear(500, self.nlatent),
-            nn.ReLU(),
+            nn.Linear(self.nGhidden, self.nGhidden),
+            nn.BatchNorm1d(self.nGhidden, eps=1e-15, momentum=0.1),
+            nn.Linear(self.nGhidden, self.nlatent),
         )
 
         # Epsilon to prevent 0

@@ -15,7 +15,9 @@ def config_args(args, conf):
         args.nhidden = 1000
         args.nDhidden = 500
         args.lr_ae = 1e-04
-        args.lr_disc = 5e-05
+        args.lr_D = 1e-05
+        args.lr_G = 1e-05
+        args.niters_gan_schedule = None
 
     elif conf == 3:
         args.model = 'arae'
@@ -25,6 +27,10 @@ def config_args(args, conf):
         args.nhidden = 1000
         args.nDhidden = 500
         args.nGhidden = 500
+        args.lr_ae = 1e-04
+        args.lr_D = 1e-05
+        args.lr_G = 1e-05
+        args.niters_gan_schedule = None
 
     elif conf == 4:
         args.model = 'vqvae'
@@ -43,6 +49,8 @@ def config_args(args, conf):
         args.dataset = 'snli'
         args.nlatent = 300
         args.nhidden = 300
+        args.lr_ae = 1
+        args.lr_adv = 1
 
 
     elif conf == 6:
@@ -51,6 +59,8 @@ def config_args(args, conf):
         args.nlatent = 300
         args.nDhidden = 300
         args.niters_gan_d = 5
+        args.lr_ae = 1
+        args.lr_adv = 1
 
     elif conf == 7:
         args.model = 'lstmarae'
@@ -60,6 +70,8 @@ def config_args(args, conf):
         args.nDhidden = 300
         args.nGhidden = 300
         args.niters_gan_d = 5
+        args.lr_ae = 1
+        args.lr_adv = 1
 
     elif conf == 8:
         args.model = 'lstmvqvae'
@@ -67,6 +79,8 @@ def config_args(args, conf):
         args.nlatent = 300
         args.nembdim = 300
         args.nemb = 512
+        args.lr_ae = 1
+        args.lr_adv = 1
 
     else:
         raise NameError

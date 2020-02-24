@@ -364,7 +364,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, default=20, help='The maximum number of epochs')
     parser.add_argument('--batch_size', type=int, default=128, help='The number of batch size')
     parser.add_argument('--lr_ae', type=float, default=1e-4, help='Learning rate of Autoencoder')
-    parser.add_argument('--lr_adv', type=float, default=5e-5, help='Learning rate of encoder with adversarial loss')
+    parser.add_argument('--lr_adv', type=float, default=1e-4, help='Learning rate of encoder with adversarial loss')
     parser.add_argument('--lr_D', type=float, default=5e-5, help='Learning rate of Discriminator')
     parser.add_argument('--lr_G', type=float, default=5e-5, help='Learning rate of Generator')
     parser.add_argument('--anneal_function', type=str, default='logistic', help='kl annealing function; [logistic]') # Add other functions
