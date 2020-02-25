@@ -55,3 +55,54 @@ def log_line(line, log_file, is_print = True, is_line = True):
             print(line)
         else:
             print(line, end = ' ')
+
+def lstm_scores(ep_bleus, ep_selfbleus, ep_dists, bleus, selfbleus, dists):
+    ep_bleus = ep_bleus.round(3)
+    ep_selfbleus = ep_selfbleus.round(3)
+    ep_dists = ep_dists.round(3)
+    print("bleus : {}".format(ep_bleus))
+    print("self bleus : {}".format(ep_selfbleus))
+    print("dists : {}".format(ep_dists))
+
+    ep_bleus = np.expand_dims(ep_bleus, axis=0)
+    ep_selfbleus = np.expand_dims(ep_selfbleus, axis=0)
+    ep_dists = np.expand_dims(ep_dists, axis=0)
+
+    if len(bleus) == 0:
+        bleus = ep_bleus
+    else:
+        bleus = np.append(bleus, ep_bleus, axis=0)
+
+    if len(selfbleus) == 0:
+        selfbleus = ep_selfbleus
+    else:
+        selfbleus = np.append(selfbleus, ep_selfbleus, axis=0)
+
+    if len(dists) == 0:
+        dists = ep_dists
+    else:
+        dists = np.append(dists, ep_dists, axis=0)
+
+    return bleus, selfbleus, dists
+
+def log_lstm_scores(bleus, selfbleus, dists, log_file):
+    bleus = np.transpose(bleus)
+    selfbleus = np.transpose(selfbleus)
+    dists = np.transpose(dists)
+
+    for i, bleu in enumerate(bleus):
+        log_line("BLEU-{}".format(i+1), log_file)
+        for ep_bleu in bleu:
+            log_line(str(ep_bleu), log_file)
+
+    for i, selfbleu in enumerate(selfbleus):
+        log_line("SELF BLEU-{}".format(i+1), log_file)
+        for ep_selfbleu in selfbleu:
+            log_line(str(ep_selfbleu), log_file)
+
+    for i, dist in enumerate(dists):
+        log_line("DIST-{}".format(i+1), log_file)
+        for ep_dist in dist:
+            log_line(str(ep_dist), log_file)
+
+

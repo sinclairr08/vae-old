@@ -20,7 +20,7 @@ from models.lstmarae import LSTM_ARAE
 from models.vqvae import VQ_VAE
 from models.lstmvqvae import LSTM_VQ_VAE
 
-from utils import to_gpu, batchify
+from utils import to_gpu, batchify, lstm_scores, log_lstm_scores
 from preprocess import Corpus
 from config import config_args
 
@@ -200,12 +200,21 @@ def main(args):
         Model = to_gpu(Model, args.cuda)
         optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
 
+        bleus = np.array([])
+        selfbleus = np.array([])
+        dists = np.array([])
+
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
-            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+            ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
-            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+            ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+
+            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
+                        bleus, selfbleus, dists)
+
+        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
 
     # Case 6 : SNLI with LSTM-AAE
     elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
@@ -241,16 +250,24 @@ def main(args):
 
         niters_gan = 1
 
+        bleus = np.array([])
+        selfbleus = np.array([])
+        dists = np.array([])
         for epoch in range(1, args.epochs + 1):
             if epoch in gan_schedule:
                 niters_gan += 1
             Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
                               niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_ae,
                               args.log_file, args.log_interval)
-            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+            ep_bleus= Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
-            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+            ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+
+            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
+                                                  bleus, selfbleus, dists)
+
+        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
 
     # Case 7 : SNLI with LSTM-ARAE
     elif args.dataset == 'snli' and args.model == 'lstmarae':        # mod : bc or other datasets
@@ -289,16 +306,23 @@ def main(args):
 
         niters_gan = 1
 
+        bleus = np.array([])
+        selfbleus = np.array([])
+        dists = np.array([])
         for epoch in range(1, args.epochs + 1):
             if epoch in gan_schedule:
                 niters_gan += 1
             Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
                               niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_g, args.niters_gan_ae,
                               args.log_file, args.log_interval)
-            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+            ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
-            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+            ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
+                                                  bleus, selfbleus, dists)
+
+        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
 
     # Case 8 : SNLI with LSTM_VQ_VAE (Need more automization)
     elif args.dataset == 'snli' and args.model == 'lstmvqvae':        # mod : bc or other datasets
@@ -324,12 +348,20 @@ def main(args):
         Model = to_gpu(Model, args.cuda)
         optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
 
+        bleus = np.array([])
+        selfbleus = np.array([])
+        dists = np.array([])
+
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
-            Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+            ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
-            Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+            ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
                          log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
+                                                  bleus, selfbleus, dists)
+
+        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
     else:
         raise NotImplementedError
 

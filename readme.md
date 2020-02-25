@@ -95,6 +95,7 @@ $ python3 main.py --config 1
   2. [Pytorch AAE](https://github.com/bfarzin/pytorch_aae)
   3. [Pytorch Sentence VAE](https://github.com/timbmg/Sentence-VAE)
   4. [Pytorch VQ VAE](https://github.com/zalandoresearch/pytorch-vq-vae)
+  5. [Pytorch ARAE](https://github.com/jakezhaojb/ARAE)
 
 
 

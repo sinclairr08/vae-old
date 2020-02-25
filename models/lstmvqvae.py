@@ -310,11 +310,14 @@ class LSTM_VQ_VAE(nn.Module):
             epoch, total_loss / total_len, total_nll_loss / total_len, total_vq_loss / total_len),
             log_file, is_print=True)
 
-        log_line("BLEU-1: {:.3f}".format((avg_bleu1 / total_len) * 100), log_file,is_print=True)
-        log_line("BLEU-2: {:.3f}".format((avg_bleu2 / total_len) * 100), log_file, is_print=True)
-        log_line("BLEU-3: {:.3f}".format((avg_bleu3 / total_len) * 100), log_file, is_print=True)
-        log_line("BLEU-4: {:.3f}".format((avg_bleu4 / total_len) * 100), log_file, is_print=True)
-        log_line("BLEU-5: {:.3f}".format((avg_bleu5 / total_len) * 100), log_file, is_print=True)
+        avg_bleu1 = (avg_bleu1 / total_len) * 100
+        avg_bleu2 = (avg_bleu2 / total_len) * 100
+        avg_bleu3 = (avg_bleu3 / total_len) * 100
+        avg_bleu4 = (avg_bleu4 / total_len) * 100
+        avg_bleu5 = (avg_bleu5 / total_len) * 100
+
+        avg_bleus = np.array([avg_bleu1, avg_bleu2, avg_bleu3, avg_bleu4, avg_bleu5])
+        return avg_bleus
 
     # mod : Not yet
     def sample(self, epoch, sample_num, maxlen, idx2word, log_file, save_path, sample_method='sampling'):
@@ -381,11 +384,11 @@ class LSTM_VQ_VAE(nn.Module):
             log_line(sentence, sampling_file, is_print=False)
             sentences.append(sentence)
 
-        selfbleu1 = SelfBleu(test_text=sampling_file, gram=1).get_score()
-        selfbleu2 = SelfBleu(test_text=sampling_file, gram=2).get_score()
-        selfbleu3 = SelfBleu(test_text=sampling_file, gram=3).get_score()
-        selfbleu4 = SelfBleu(test_text=sampling_file, gram=4).get_score()
-        selfbleu5 = SelfBleu(test_text=sampling_file, gram=5).get_score()
+        selfbleu1 = SelfBleu(test_text=sampling_file, gram=1).get_score() * 100
+        selfbleu2 = SelfBleu(test_text=sampling_file, gram=2).get_score() * 100
+        selfbleu3 = SelfBleu(test_text=sampling_file, gram=3).get_score() * 100
+        selfbleu4 = SelfBleu(test_text=sampling_file, gram=4).get_score() * 100
+        selfbleu5 = SelfBleu(test_text=sampling_file, gram=5).get_score() * 100
 
         dist1 = UniqueGram(test_text=sampling_file, gram=1).get_score()
         dist2 = UniqueGram(test_text=sampling_file, gram=2).get_score()
@@ -393,16 +396,6 @@ class LSTM_VQ_VAE(nn.Module):
         dist4 = UniqueGram(test_text=sampling_file, gram=4).get_score()
         dist5 = UniqueGram(test_text=sampling_file, gram=5).get_score()
 
-        log_line('Self-BLEU 1: {:.3f}'.format(selfbleu1 * 100), log_file, is_print=True)
-        log_line('Self-BLEU 2: {:.3f}'.format(selfbleu2 * 100), log_file, is_print=True)
-        log_line('Self-BLEU 3: {:.3f}'.format(selfbleu3 * 100), log_file, is_print=True)
-        log_line('Self-BLEU 4: {:.3f}'.format(selfbleu4 * 100), log_file, is_print=True)
-        log_line('Self-BLEU 5: {:.3f}'.format(selfbleu5 * 100), log_file, is_print=True)
-
-        log_line('Dist 1: {:.3f}'.format(dist1), log_file, is_print=True)
-        log_line('Dist 2: {:.3f}'.format(dist2), log_file, is_print=True)
-        log_line('Dist 3: {:.3f}'.format(dist3), log_file, is_print=True)
-        log_line('Dist 4: {:.3f}'.format(dist4), log_file, is_print=True)
-        log_line('Dist 5: {:.3f}'.format(dist5), log_file, is_print=True)
-
-        return
+        selfbleus = np.array([selfbleu1, selfbleu2, selfbleu3, selfbleu4, selfbleu5])
+        dists = np.array([dist1, dist2, dist3, dist4, dist5])
+        return selfbleus, dists
