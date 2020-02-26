@@ -196,6 +196,7 @@ def main(args):
                          nembdim = args.nembdim,
                          nlayers= args.nlayers,
                          nhidden= args.nhidden,
+                         hidden_noise_r = args.noise_r,
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
@@ -235,6 +236,7 @@ def main(args):
                          nembdim = args.nembdim,
                          nlayers= args.nlayers,
                          nDhidden=args.nDhidden,
+                         hidden_noise_r=args.noise_r,
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
@@ -290,6 +292,7 @@ def main(args):
                          nDhidden=args.nDhidden,
                          nGhidden=args.nGhidden,
                          nnoise= args.nnoise,
+                         hidden_noise_r=args.noise_r,
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
@@ -382,6 +385,7 @@ def main(args):
                          nembdim=args.nembdim,
                          nlayers=args.nlayers,
                          nhidden=args.nhidden,
+                         hidden_noise_r=args.noise_r,
                          is_gpu=args.cuda)
 
         Model = to_gpu(Model, args.cuda)
@@ -448,6 +452,9 @@ if __name__ == "__main__":
     parser.add_argument('--niters_gan_g', type=int, default=1, help='The number of iteration for generator')
     parser.add_argument('--niters_gan_ae', type=int, default=1, help='The number of iteration for ae using gan')
     parser.add_argument('--niters_gan_schedule', type=str, default='2-4-6', help='GAN SCHEDULE')
+    parser.add_argument('--noise_r', type=float, default=0.05, help='stdev of noise for autoencoder (regularizer)')
+    parser.add_argument('--noise_anneal', type=float, default=0.9995,
+                        help='anneal noise_radius exponentially by this every 100 iterations')
 
     # File load & Save  Arguments
     parser.add_argument('--save_path', type=str, default=None, help='location to save the trained file & samples')

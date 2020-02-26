@@ -15,7 +15,7 @@ from utils import to_gpu, log_line
 
 class LSTM_ARAE(nn.Module):
     def __init__(self, enc, dec, nlatent, ntokens, nembdim,
-                 nlayers, nDhidden, nGhidden, nnoise,
+                 nlayers, nDhidden, nGhidden, nnoise, hidden_noise_r,
                  is_gpu):
 
         super(LSTM_ARAE, self).__init__()
@@ -29,6 +29,7 @@ class LSTM_ARAE(nn.Module):
         self.nDhidden = nDhidden
         self.nGhidden = nGhidden
         self.nnoise = nnoise
+        self.hidden_noise_r = hidden_noise_r
 
         # Model infos
         self.enc = enc
@@ -133,7 +134,6 @@ class LSTM_ARAE(nn.Module):
         hidden = hidden / torch.norm(hidden, p=2, dim=1, keepdim=True)
 
         self.is_hidden_noise = True
-        self.hidden_noise_r = 0.2
 
         if self.is_hidden_noise and self.hidden_noise_r > 0:
             hidden_noise = torch.normal(mean=torch.zeros_like(hidden),
@@ -141,6 +141,9 @@ class LSTM_ARAE(nn.Module):
             hidden = hidden + to_gpu(Variable(hidden_noise), self.is_gpu)
 
         return hidden
+
+    def noise_anneal(self, fac):
+        self.hidden_noise_r *= fac
 
     def decode(self, hidden, batch_size, maxlen, input=None, lengths=None):
 
@@ -310,6 +313,9 @@ class LSTM_ARAE(nn.Module):
 
             if batch_idx % log_interval == 0 and batch_idx > 0:
                 pass
+
+            if batch_idx % 100 == 0:
+                self.noise_anneal(0.9995)
 
         log_line("Epoch {} Train NLL Loss : {:.4f} Disc Loss : {:.4f} Adv Val : {:.4f} Gen Val : {:.4f}".format(
             epoch, total_nll / total_len, total_errD / total_len, total_err_adv / total_len, total_errG / total_len),
