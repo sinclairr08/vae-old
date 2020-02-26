@@ -19,6 +19,7 @@ from models.lstmaae import LSTM_AAE
 from models.lstmarae import LSTM_ARAE
 from models.vqvae import VQ_VAE
 from models.lstmvqvae import LSTM_VQ_VAE
+from models.lstmae import LSTM_AE
 
 from utils import to_gpu, batchify, lstm_scores, log_lstm_scores
 from preprocess import Corpus
@@ -362,6 +363,47 @@ def main(args):
                                                   bleus, selfbleus, dists)
 
         log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+
+    # Case 9 : SNLI with LSTM-AE
+    elif args.dataset == 'snli' and args.model == 'lstmae':  # mod : bc or other datasets
+        nltk.download("book")
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size, shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size, shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_AE(enc='lstm', dec='lstm',
+                         nlatent=args.nlatent,
+                         ntokens=ntokens,
+                         nembdim=args.nembdim,
+                         nlayers=args.nlayers,
+                         nhidden=args.nhidden,
+                         is_gpu=args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
+
+        bleus = np.array([])
+        selfbleus = np.array([])
+        dists = np.array([])
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
+            ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                                        args.save_path)
+            ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen=args.maxlen,
+                                                  idx2word=corpus.dictionary.idx2word,
+                                                  log_file=args.log_file, save_path=args.save_path,
+                                                  sample_method='sampling')
+
+            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
+                                                  bleus, selfbleus, dists)
+
+        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
     else:
         raise NotImplementedError
 
@@ -377,7 +419,7 @@ if __name__ == "__main__":
     # Data & Model Arguments
     parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist, snli]')
     parser.add_argument('--model', type=str, default='lstmvqvae', help='model; [vae, aae, arae, lstmvae, lstmaae,'
-                                                                       'vqvae, lstmvqvae]')
+                                                                       'vqvae, lstmvqvae, lstmae]')
     parser.add_argument('--maxlen', type=int, default=30, help='Max length of the sentence; Exceeded words are truncated')
 
     # Model Architecture Arguments

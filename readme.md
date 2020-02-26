@@ -56,7 +56,7 @@ $ python3 main.py --config 1
   
   ##### epoch 20
   
-  * VQ VAE (Image)
+* VQ VAE (Image)
 
   ![VQVAE_epoch1](./upload_image/vqvae_mnist_epoch_1.png)
  
@@ -81,6 +81,11 @@ $ python3 main.py --config 1
   ![VQVAE_epoch20](./upload_image/vqvae_mnist_epoch_20.png)
   
   ##### epoch 20
+
+## Examples (SNLI data)
+* LSTM-AE Reconstruction
+  - A man in a black shirt is looking at a bike in a workshop .
+  - A man in a blue shirt is looking at a car in a distance .
 
 ## References
 * Papers
