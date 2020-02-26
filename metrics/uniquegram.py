@@ -35,6 +35,8 @@ class UniqueGram(Metrics):
             temp_grams1, temp_grams2 = self.get_gram(sentence)
             grams += temp_grams1
             grams_num += temp_grams2
+        if grams_num == 0:
+            return 0
         return len(set(grams))/grams_num
 
 
