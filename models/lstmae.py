@@ -286,16 +286,8 @@ class LSTM_AE(nn.Module):
             token_logits = self.hidden2token(output.squeeze(1))
 
             if sample_method == 'sampling':
-                # print(token_logits)
                 token_probs = F.softmax(token_logits, dim=-1)  # review that why it is -1
-                # print(token_probs)
-
-                # mod : Error that negative prob
-                try:
-                    token_indicies = torch.multinomial(token_probs, num_samples=1)
-                except:
-                    print(token_probs)
-                    exit(-1)
+                token_indicies = torch.multinomial(token_probs, num_samples=1)
 
             elif sample_method == 'greedy':
                 token_indicies = torch.argmax(token_logits, dim=1)
@@ -308,13 +300,14 @@ class LSTM_AE(nn.Module):
 
             # Use the previous output word as input
             embs = self.embedding_dec(token_indicies)
-            embs = embs.squeeze(1)
+            if sample_method == 'sampling':
+                embs = embs.squeeze(1)
             aug_embs = torch.cat([embs, random_noise.unsqueeze(1)], 2)
 
         cat_token_indicies = torch.cat(all_token_indicies, 1)
 
-        # print(cat_token_indicies.shape)
-        cat_token_indicies = cat_token_indicies.squeeze(2)
+        if sample_method == 'sampling':
+            cat_token_indicies = cat_token_indicies.squeeze(2)
         cat_token_indicies = cat_token_indicies.data.cpu().numpy()
 
         sampling_file = os.path.join(save_path, 'epoch_' + str(epoch) + "_sampling.txt")

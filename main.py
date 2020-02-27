@@ -211,7 +211,9 @@ def main(args):
             ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path,
+                                                   sample_method = 'greedy')
+                                                   # sample_method='sampling')
 
             bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
                         bleus, selfbleus, dists)
@@ -265,7 +267,9 @@ def main(args):
             ep_bleus= Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path,
+                                                   sample_method='greedy')
+                                                   #sample_method='sampling')
 
             bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
                                                   bleus, selfbleus, dists)
@@ -322,7 +326,9 @@ def main(args):
             ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path,
+                                                   sample_method='greedy')
+                                                   #sample_method='sampling')
             bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
                                                   bleus, selfbleus, dists)
 
@@ -361,7 +367,9 @@ def main(args):
             ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
-                         log_file = args.log_file, save_path=args.save_path, sample_method = 'sampling')
+                         log_file = args.log_file, save_path=args.save_path,
+                                                   sample_method='greedy')
+                                                   # sample_method='sampling')
             bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
                                                   bleus, selfbleus, dists)
 
@@ -402,7 +410,8 @@ def main(args):
             ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen=args.maxlen,
                                                   idx2word=corpus.dictionary.idx2word,
                                                   log_file=args.log_file, save_path=args.save_path,
-                                                  sample_method='sampling')
+                                                  sample_method='greedy')
+                                                  #sample_method='sampling')
 
             bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
                                                   bleus, selfbleus, dists)
