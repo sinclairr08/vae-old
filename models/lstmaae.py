@@ -11,7 +11,7 @@ from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction # To calc
 from metrics.uniquegram import UniqueGram
 from metrics.selfbleu import SelfBleu
 
-from utils import to_gpu, log_line
+from utils import to_gpu, log_line, calc_gradient_penalty
 
 class LSTM_AAE(nn.Module):
     def __init__(self, enc, dec, nlatent, ntokens, nembdim,
@@ -191,7 +191,7 @@ class LSTM_AAE(nn.Module):
         return loss
 
     def train_epoch(self, epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
-                    niters_gan, niters_ae, niters_gan_d, niters_gan_ae, log_file, log_interval):
+                    niters_gan, niters_ae, niters_gan_d, niters_gan_ae, gp, log_file, log_interval):
         self.train()
         total_nll = 0
         total_err_adv = 0
@@ -245,8 +245,13 @@ class LSTM_AAE(nn.Module):
 
                     errD = -(errD_real - errD_fake)
                     total_errD += torch.sum(errD).item()
-                    # mod : GP
-                    torch.nn.utils.clip_grad_norm_(self.disc.parameters(), max_norm=1)
+
+                    self.gp = gp
+                    if self.gp == True:
+                        gradient_penalty = calc_gradient_penalty(netD=self.disc, gan_gp_lambda=1,
+                                                                 real_data=latent_real.data, fake_data=latent_fake.data)
+                        gradient_penalty.backward()
+
                     optim_disc.step()
 
                 # Phase 3 : Train encoder

@@ -262,7 +262,7 @@ def main(args):
             if epoch in gan_schedule:
                 niters_gan += 1
             Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc,
-                              niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_ae,
+                              niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_ae, args.gp,
                               args.log_file, args.log_interval)
             ep_bleus= Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
@@ -322,7 +322,7 @@ def main(args):
                 niters_gan += 1
             Model.train_epoch(epoch, train_loader, optim_enc_nll, optim_enc_adv, optim_dec, optim_disc, optim_gen,
                               niters_gan, args.niters_ae, args.niters_gan_d, args.niters_gan_g, args.niters_gan_ae,
-                              args.log_file, args.log_interval)
+                              args.gp, args.log_file, args.log_interval)
             ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
                              args.save_path)
             ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
@@ -464,6 +464,7 @@ if __name__ == "__main__":
     parser.add_argument('--noise_r', type=float, default=0.05, help='stdev of noise for autoencoder (regularizer)')
     parser.add_argument('--noise_anneal', type=float, default=0.9995,
                         help='anneal noise_radius exponentially by this every 100 iterations')
+    parser.add_argument('--gp', action='store_true', help='apply gradient penalty')
 
     # File load & Save  Arguments
     parser.add_argument('--save_path', type=str, default=None, help='location to save the trained file & samples')

@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import random
 
+from torch.autograd import Variable
+
 def to_gpu(var, is_gpu):
     return var.cuda() if is_gpu else var
 
@@ -105,4 +107,20 @@ def log_lstm_scores(bleus, selfbleus, dists, log_file):
         for ep_dist in dist:
             log_line(str(ep_dist), log_file)
 
+''' Steal from https://github.com/caogang/wgan-gp/blob/master/gan_cifar10.py '''
+def calc_gradient_penalty(netD, gan_gp_lambda, real_data, fake_data):
+    bsz = real_data.size(0)
+    alpha = torch.rand(bsz, 1)
+    alpha = alpha.expand(bsz, real_data.size(1))  # only works for 2D XXX
+    alpha = alpha.cuda()
+    interpolates = alpha * real_data + ((1 - alpha) * fake_data)
+    interpolates = Variable(interpolates, requires_grad=True)
+    disc_interpolates = netD(interpolates)
 
+    gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolates,
+                                    grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+                                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+    gradients = gradients.view(gradients.size(0), -1)
+
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * gan_gp_lambda
+    return gradient_penalty
