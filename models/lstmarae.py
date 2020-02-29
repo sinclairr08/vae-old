@@ -443,7 +443,7 @@ class LSTM_ARAE(nn.Module):
             embs = self.embedding_dec(token_indicies)
             if sample_method == 'sampling':
                 embs = embs.squeeze(1)
-            aug_embs = torch.cat([embs, random_noise.unsqueeze(1)], 2)
+            aug_embs = torch.cat([embs, latent_synth.unsqueeze(1)], 2)
 
         cat_token_indicies = torch.cat(all_token_indicies, 1)
 
