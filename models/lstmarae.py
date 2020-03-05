@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import math
 
 import torch
 import torch.nn as nn
@@ -66,15 +67,16 @@ class LSTM_ARAE(nn.Module):
 
         self.disc = nn.Sequential(
             nn.Linear(self.nlatent, self.nDhidden),
-            nn.ReLU(),
+            nn.LeakyReLU(0.2),
             nn.Linear(self.nDhidden, self.nDhidden),
             nn.BatchNorm1d(self.nDhidden, eps=1e-05, momentum=0.1),
-            nn.ReLU(),
+            nn.LeakyReLU(0.2),
             nn.Linear(self.nDhidden, 1),
         )
 
         self.gen = nn.Sequential(
             nn.Linear(self.nnoise, self.nGhidden),
+            nn.BatchNorm1d(self.nGhidden, eps=1e-05, momentum=0.1),
             nn.ReLU(),
             nn.Linear(self.nGhidden, self.nGhidden),
             nn.BatchNorm1d(self.nGhidden, eps=1e-05, momentum=0.1),
@@ -165,6 +167,11 @@ class LSTM_ARAE(nn.Module):
 
         return output
 
+    def store_grad_norm(self, grad):
+        norm = torch.norm(grad, 2, 1)
+        self.grad_norm = norm.detach().data.mean()
+        return grad
+
     def forward(self, input, lengths, encode_only=False):
 
         batch_size, maxlen = input.size()
@@ -173,6 +180,9 @@ class LSTM_ARAE(nn.Module):
 
         if encode_only:
             return hidden
+
+        if hidden.requires_grad:
+            hidden.register_hook(self.store_grad_norm)
 
         # mod : Register_hook
         output = self.decode(hidden, batch_size, maxlen, input, lengths)
@@ -218,6 +228,17 @@ class LSTM_ARAE(nn.Module):
         total_errD = 0
         total_errG = 0
         total_len = 0
+
+        def grad_hook(grad):
+            # Gradient norm: regularize to be same
+            # code_grad_gan * code_grad_ae / norm(code_grad_gan)
+            gan_norm = torch.norm(grad, 2, 1).detach().data.mean()
+            normed_grad = grad*self.grad_norm / gan_norm
+
+            # weight factor and sign flip
+            normed_grad *= -math.fabs(-0.01)
+            return normed_grad
+
 
         for batch_idx, (source, target, lengths) in enumerate(train_loader):
             total_len += len(source)
@@ -287,6 +308,7 @@ class LSTM_ARAE(nn.Module):
                     total_adv += adv_loss_enc.item()
                     '''
                     latent_real = self.encode(source, lengths)
+                    latent_real.register_hook(grad_hook)
                     err_adv = self.disc(latent_real)
 
                     err_adv.backward(mone)

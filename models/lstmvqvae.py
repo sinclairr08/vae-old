@@ -187,6 +187,12 @@ class LSTM_VQ_VAE(nn.Module):
 
         return output
 
+    def store_grad_norm(self, grad):
+        norm = torch.norm(grad, 2, 1)
+        self.grad_norm = norm.detach().data.mean()
+        return grad
+
+
     def forward(self, input, lengths, encode_only=False):
 
         batch_size, maxlen = input.size()
@@ -194,6 +200,9 @@ class LSTM_VQ_VAE(nn.Module):
 
         if encode_only:
             return hidden
+
+        if hidden.requires_grad:
+            hidden.register_hook(self.store_grad_norm)
 
         # mod : Register_hook
         output = self.decode(hidden, batch_size, maxlen, input, lengths)
