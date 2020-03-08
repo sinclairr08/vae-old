@@ -114,7 +114,7 @@ class LSTM_VAE(nn.Module):
         packed_output, state = self.encoder(packed_embs)
 
         # mod : It is only possible when nlayers == 1 and Uni
-        hidden = state[0][0]
+        hidden = state[0][-1]
 
         # mod : Normalize to Gaussian
         # mod : argumentize

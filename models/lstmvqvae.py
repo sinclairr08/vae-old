@@ -136,23 +136,13 @@ class LSTM_VQ_VAE(nn.Module):
         packed_output, state = self.encoder(packed_embs)
 
         # mod : It is only possible when nlayers == 1 and Uni
-        hidden = state[0][0]
+        hidden = state[0][-1]
 
         hidden, loss = self.codebook(hidden)
 
         # mod : Normalize to Gaussian
         # mod : argumentize
         hidden = hidden / torch.norm(hidden, p=2, dim=1, keepdim=True)
-
-        '''
-        self.is_hidden_noise = False                ### MOD!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.hidden_noise_r = 0.2
-        
-        if self.is_hidden_noise and self.hidden_noise_r > 0 :
-            hidden_noise = torch.normal(mean=torch.zeros_like(hidden),
-                                        std = self.hidden_noise_r)
-            hidden  = hidden + to_gpu(Variable(hidden_noise), self.is_gpu)
-        '''
 
         return hidden, loss
 
