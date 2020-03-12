@@ -21,15 +21,13 @@ class LSTM_VQEmbedding(nn.Module):
         self.nembdim = nembdim
         self.commit_cost = commit_cost
         self.is_gpu = is_gpu
-        self.init_method = init_method
 
         self.embedding = nn.Embedding(self.nemb, self.nembdim)
         if init_method == 'uniform':
             self.embedding.weight.data.uniform_(-1 / self.nemb, 1 / self.nemb)
 
         elif init_method == 'normal':
-            self.embedding.weight.data.normal(-1 / self.nemb, 1 / self.nemb)
-
+            self.embedding.weight.data.normal_(-1 / self.nemb, 1 / self.nemb)
         else:
             raise NameError
 
@@ -62,11 +60,11 @@ class LSTM_VQEmbedding(nn.Module):
 
         return quantized.contiguous(), loss
 
-class LSTM_VQ_VAE(nn.Module):
-    def __init__(self, enc, dec, nlatent, ntokens, nemb, nembdim,
+class LSTM_VQ_VAE2(nn.Module):
+    def __init__(self, enc, dec, nlatent, ntokens, nemb, nembdim, nembdiml,
                  nlayers, word_dropout, commit_cost, init_method, is_gpu):
 
-        super(LSTM_VQ_VAE, self).__init__()
+        super(LSTM_VQ_VAE2, self).__init__()
 
         self.is_gpu = is_gpu
 
@@ -74,6 +72,7 @@ class LSTM_VQ_VAE(nn.Module):
         self.nlatent = nlatent
         self.ntokens = ntokens
         self.nembdim = nembdim
+        self.nembdiml = nembdiml
         self.nlayers = nlayers
         self.nhidden = nlatent
 
@@ -84,13 +83,14 @@ class LSTM_VQ_VAE(nn.Module):
         self.dec = dec
 
         self.word_dropout = word_dropout
+        self.pretrain_epoch = 5
 
         # Consider more..
 
         # mod : dropout
         if self.enc == 'lstm':
             self.encoder = nn.LSTM(
-                input_size=self.nembdim,
+                input_size=self.nembdiml,
                 hidden_size=self.nhidden,
                 num_layers=self.nlayers,
                 batch_first=True,
@@ -102,7 +102,7 @@ class LSTM_VQ_VAE(nn.Module):
         # mod
         if self.dec == 'lstm':
             self.decoder = nn.LSTM(
-                input_size=self.nembdim + self.nhidden,  # Decoder input size
+                input_size=self.nembdiml + self.nhidden,  # Decoder input size
                 hidden_size=self.nhidden,
                 num_layers=self.nlayers,
                 batch_first=True,
@@ -112,9 +112,12 @@ class LSTM_VQ_VAE(nn.Module):
             raise NotImplementedError
 
         # Layers
-        self.embedding_enc = nn.Embedding(self.ntokens, nembdim)
-        self.embedding_dec = nn.Embedding(self.ntokens, nembdim)
+        self.embedding_enc = nn.Embedding(self.ntokens, nembdiml)
+        self.embedding_dec = nn.Embedding(self.ntokens, nembdiml)
 
+        self.hidden2mean = nn.Linear(self.nhidden, self.nlatent)
+        self.hidden2logvar = nn.Linear(self.nhidden, self.nlatent)
+        self.latent2hidden = nn.Linear(self.nlatent, self.nhidden)
         self.hidden2token = nn.Linear(self.nhidden, self.ntokens)
 
         self.init_weights()
@@ -131,11 +134,17 @@ class LSTM_VQ_VAE(nn.Module):
         for p in self.decoder.parameters():
             p.data.uniform_(-initrange, initrange)
 
+        self.hidden2mean.weight.data.uniform_(-initrange, initrange)
+        self.hidden2mean.bias.data.fill_(0)
+        self.hidden2logvar.weight.data.uniform_(-initrange, initrange)
+        self.hidden2logvar.bias.data.fill_(0)
+        self.latent2hidden.weight.data.uniform_(-initrange, initrange)
+        self.latent2hidden.bias.data.fill_(0)
         self.hidden2token.weight.data.uniform_(-initrange, initrange)
         self.hidden2token.bias.data.fill_(0)
 
 
-    def encode(self, input, lengths):
+    def encode(self, input, lengths, is_pretrain = False):
         embs = self.embedding_enc(input)
         packed_embs = pack_padded_sequence(
             input=embs, lengths=lengths, batch_first=True
@@ -143,16 +152,43 @@ class LSTM_VQ_VAE(nn.Module):
 
         packed_output, state = self.encoder(packed_embs)
 
-        # mod : It is only possible when nlayers == 1 and Uni
-        hidden = state[0][-1]
+        hidden = state[0][0]
 
-        hidden, loss = self.codebook(hidden)
+        if not is_pretrain:
+            # mod : It is only possible when nlayers == 1 and Uni
+            hidden, loss = self.codebook(hidden)
 
-        # mod : Normalize to Gaussian
-        # mod : argumentize
-        hidden = hidden / torch.norm(hidden, p=2, dim=1, keepdim=True)
+            # mod : Normalize to Gaussian
+            # mod : argumentize
+            hidden = hidden / torch.norm(hidden, p=2, dim=1, keepdim=True)
 
-        return hidden, loss
+            return hidden, loss
+
+        else:
+            hidden = hidden / torch.norm(hidden, p=2, dim=1, keepdim=True)
+            self.is_hidden_noise = True
+            self.hidden_noise_r = 0.2
+        
+            if self.is_hidden_noise and self.hidden_noise_r > 0 :
+                hidden_noise = torch.normal(mean=torch.zeros_like(hidden),
+                                        std = self.hidden_noise_r)
+                hidden  = hidden + to_gpu(Variable(hidden_noise), self.is_gpu)
+
+            return hidden
+
+
+    def noise_anneal(self, fac):
+        self.hidden_noise_r *= fac
+
+    def reparameterize(self, hidden):
+        self.mu = self.hidden2mean(hidden)
+        self.logvar = self.hidden2logvar(hidden)
+        self.std = torch.exp(0.5 * self.logvar)
+
+        eps = to_gpu(torch.rand_like(self.std), self.is_gpu)  # epsilon for reparametrization
+        latent = self.mu + self.std * eps
+
+        return latent
 
     def decode(self, hidden, batch_size, maxlen, input=None, lengths=None):
 
@@ -191,10 +227,16 @@ class LSTM_VQ_VAE(nn.Module):
         return grad
 
 
-    def forward(self, input, lengths, encode_only=False):
+    def forward(self, input, lengths, encode_only=False, is_pretrain = False):
 
         batch_size, maxlen = input.size()
-        hidden, vq_loss = self.encode(input, lengths)
+        if not is_pretrain:
+            hidden, vq_loss = self.encode(input, lengths, is_pretrain)
+
+        else:
+            hidden = self.encode(input, lengths, is_pretrain)
+            latent = self.reparameterize(hidden)
+            hidden = self.latent2hidden(latent)
 
         if encode_only:
             return hidden
@@ -205,54 +247,103 @@ class LSTM_VQ_VAE(nn.Module):
         # mod : Register_hook
         output = self.decode(hidden, batch_size, maxlen, input, lengths)
 
-        return output, vq_loss
+        if not is_pretrain:
+            return output, vq_loss
 
-    def loss(self, output, target):
+        else:
+            return output
+
+    def loss(self, output, target, step, is_pretrain):
         flattened_output = output.view(-1, self.ntokens)
         nll_loss = F.cross_entropy(flattened_output, target)
 
-        return nll_loss
+        if not is_pretrain:
+            return nll_loss
+
+        else:
+            kl_loss = -0.5 * torch.sum(1 + self.logvar - self.mu ** 2 - self.logvar.exp())
+            kl_loss /= len(output)
+
+            kl_weight = self.kl_anneal_fn(step)
+            return nll_loss + kl_weight * kl_loss, nll_loss, kl_loss
+
+
+    def kl_anneal_fn(self, step):
+        k = 0.0025
+        x0 = 2500
+        return float(1 / (1 + np.exp(-k * (step - x0))))
 
     def train_epoch(self, epoch, optimizer, train_loader, log_file, log_interval):
+        if epoch <= self.pretrain_epoch:
+            is_pretrain = True
+        else:
+            is_pretrain = False
+
         self.train()
         total_loss = 0
         total_nll_loss = 0
         total_vq_loss = 0
+        total_kl_loss = 0
         total_len = 0
 
         for batch_idx, (source, target, lengths) in enumerate(train_loader):
             total_len += len(source)
             source = to_gpu(Variable(source), self.is_gpu)
             target = to_gpu(Variable(target), self.is_gpu)
-            output, vq_loss = self.forward(source, lengths)
+            if not is_pretrain:
+                output, vq_loss = self.forward(source, lengths, is_pretrain=is_pretrain)
+            else:
+                output = self.forward(source, lengths, is_pretrain=is_pretrain)
             optimizer.zero_grad()
 
-            nll_loss = self.loss(output, target)
-            loss = nll_loss + vq_loss
-            loss.backward()
 
+            if not is_pretrain:
+                nll_loss = self.loss(output, target, batch_idx, is_pretrain)
+                loss = nll_loss + vq_loss
+                loss.backward()
+            else:
+                loss, nll_loss, kl_loss = self.loss(output, target, batch_idx, is_pretrain)
+                loss.backward()
             # mod : Argumentization of the clip
             torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1)
             optimizer.step()
 
             total_loss += loss.item()
             total_nll_loss += nll_loss.item()
-            total_vq_loss += vq_loss.item()
+            if not is_pretrain:
+                total_vq_loss += vq_loss.item()
+            else:
+                total_kl_loss += kl_loss.item()
+
+            if is_pretrain and batch_idx % 100 == 0:
+                    self.noise_anneal(0.9995)
 
             if batch_idx % log_interval == 0 and batch_idx > 0:
                 pass
 
-        log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} VQ Loss : {:.4f}".format(
+        if not is_pretrain:
+            log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} VQ Loss : {:.4f}".format(
             epoch, total_loss / total_len, total_nll_loss / total_len, total_vq_loss / total_len),
             log_file, is_print=True)
+        else:
+            log_line("Epoch {} Train Loss : {:.4f} NLL Loss : {:.4f} KL Loss : {:.4f}".format(
+                epoch, total_loss / total_len, total_nll_loss / total_len, total_kl_loss / total_len),
+                log_file, is_print=True)
 
+        del is_pretrain
         return total_loss, total_nll_loss, total_vq_loss
 
     def test_epoch(self, epoch, test_loader, idx2word, log_file, save_path):
+        if epoch <= self.pretrain_epoch:
+            is_pretrain = True
+        else:
+            is_pretrain = False
+
         self.eval()
         total_loss = 0
         total_nll_loss = 0
         total_vq_loss = 0
+        total_kl_loss = 0
         total_len = 0
 
         avg_bleu1 = 0
@@ -270,14 +361,21 @@ class LSTM_VQ_VAE(nn.Module):
                 source = to_gpu(Variable(source), self.is_gpu)
                 target = to_gpu(Variable(target), self.is_gpu)
 
-                output, vq_loss = self.forward(source, lengths)
+                if not is_pretrain:
+                    output, vq_loss = self.forward(source, lengths, is_pretrain=is_pretrain)
+                    nll_loss = self.loss(output, target, batch_idx, is_pretrain)
+                    loss = nll_loss + vq_loss
 
-                nll_loss = self.loss(output, target)
-                loss = nll_loss + vq_loss
+                    total_loss += loss.item()
+                    total_nll_loss += nll_loss.item()
+                    total_vq_loss += vq_loss.item()
+                else:
+                    output = self.forward(source, lengths, is_pretrain=is_pretrain)
 
-                total_loss += loss.item()
-                total_nll_loss += nll_loss.item()
-                total_vq_loss += vq_loss.item()
+                    loss, nll_loss, kl_loss = self.loss(output, target, batch_idx, is_pretrain)
+                    total_loss += loss.item()
+                    total_nll_loss += nll_loss.item()
+                    total_kl_loss += kl_loss.item()
 
                 with open(epoch_ae_generated_file, "a") as f:
                     max_values, max_indices = torch.max(output, 2)
@@ -312,9 +410,13 @@ class LSTM_VQ_VAE(nn.Module):
                         avg_bleu3 += gram3
                         avg_bleu4 += gram4
                         avg_bleu5 += gram5
-
-        log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} VQ Loss : {:.4f}".format(
+        if not is_pretrain:
+            log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} VQ Loss : {:.4f}".format(
             epoch, total_loss / total_len, total_nll_loss / total_len, total_vq_loss / total_len),
+            log_file, is_print=True)
+        else:
+            log_line("Epoch {} Test Loss : {:.4f} NLL Loss : {:.4f} KL Loss : {:.4f}".format(
+            epoch, total_loss / total_len, total_nll_loss / total_len, total_kl_loss / total_len),
             log_file, is_print=True)
 
         avg_bleu1 = (avg_bleu1 / total_len) * 100
@@ -324,6 +426,7 @@ class LSTM_VQ_VAE(nn.Module):
         avg_bleu5 = (avg_bleu5 / total_len) * 100
 
         avg_bleus = np.array([avg_bleu1, avg_bleu2, avg_bleu3, avg_bleu4, avg_bleu5])
+        del is_pretrain
         return avg_bleus
 
     # mod : Not yet

@@ -15,7 +15,7 @@ from utils import to_gpu, log_line
 
 class LSTM_VAE(nn.Module):
     def __init__(self, enc, dec, nlatent, ntokens, nembdim,
-                 nlayers, nhidden, hidden_noise_r,
+                 nlayers, nhidden, hidden_noise_r, word_dropout,
                  is_gpu):
 
         super(LSTM_VAE, self).__init__()
@@ -32,7 +32,7 @@ class LSTM_VAE(nn.Module):
         self.enc = enc
         self.dec = dec
 
-        self.word_dropout = 0.5
+        self.word_dropout = word_dropout
 
         # Tools
         self.is_gpu = is_gpu

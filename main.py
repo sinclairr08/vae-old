@@ -19,6 +19,7 @@ from models.lstmaae import LSTM_AAE
 from models.lstmarae import LSTM_ARAE
 from models.vqvae import VQ_VAE
 from models.lstmvqvae import LSTM_VQ_VAE
+from models.lstmvqvae2 import LSTM_VQ_VAE2
 from models.lstmae import LSTM_AE
 
 from utils import to_gpu, batchify, lstm_scores, log_lstm_scores
@@ -197,6 +198,7 @@ def main(args):
                          nlayers= args.nlayers,
                          nhidden= args.nhidden,
                          hidden_noise_r = args.noise_r,
+                         word_dropout = args.word_dropout,
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
@@ -352,7 +354,9 @@ def main(args):
                          nemb = args.nemb,
                          nembdim = args.nembdim,
                          nlayers= args.nlayers,
+                         word_dropout=args.word_dropout,
                          commit_cost=args.commit_cost,
+                         init_method=args.init_method,
                          is_gpu = args.cuda)
 
         Model = to_gpu(Model, args.cuda)
@@ -417,8 +421,54 @@ def main(args):
                                                   bleus, selfbleus, dists)
 
         log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+
+    # Case 10 : SNLI with LSTM_VQ_VAE2
+    elif args.dataset == 'snli' and args.model == 'lstmvqvae2':        # mod : bc or other datasets
+        nltk.download("book")
+        corpus = Corpus('./data/snli',
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
+
+        Model = LSTM_VQ_VAE2(enc = 'lstm', dec= 'lstm',
+                         nlatent= args.nlatent,
+                         ntokens = ntokens,
+                         nemb = args.nemb,
+                         nembdim = args.nembdim,
+                         nembdiml=args.nembdiml,
+                         nlayers= args.nlayers,
+                         word_dropout=args.word_dropout,
+                         commit_cost=args.commit_cost,
+                         init_method=args.init_method,
+                         is_gpu = args.cuda)
+
+        Model = to_gpu(Model, args.cuda)
+        optimizer = optim.Adam(Model.parameters(), lr=args.lr_ae)
+
+        bleus = np.array([])
+        selfbleus = np.array([])
+        dists = np.array([])
+
+        for epoch in range(1, args.epochs + 1):
+            Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
+            ep_bleus = Model.test_epoch(epoch, test_loader, corpus.dictionary.idx2word, args.log_file,
+                             args.save_path)
+            ep_selfbleus, ep_dists = Model.sample(epoch, sample_num=args.sample_num, maxlen = args.maxlen, idx2word = corpus.dictionary.idx2word,
+                         log_file = args.log_file, save_path=args.save_path,
+                                                   sample_method='greedy')
+                                                   # sample_method='sampling')
+            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
+                                                  bleus, selfbleus, dists)
+
+        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+
     else:
         raise NotImplementedError
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='VAE code')
@@ -465,6 +515,7 @@ if __name__ == "__main__":
     parser.add_argument('--noise_anneal', type=float, default=0.9995,
                         help='anneal noise_radius exponentially by this every 100 iterations')
     parser.add_argument('--gp', action='store_true', help='apply gradient penalty')
+    parser.add_argument('--word_dropout', type=float, default=0.5, help='Word dropout of VAE model')
 
     # File load & Save  Arguments
     parser.add_argument('--save_path', type=str, default=None, help='location to save the trained file & samples')
@@ -473,6 +524,9 @@ if __name__ == "__main__":
     # Utilty Arguments # mod : is it really need?
     parser.add_argument('--lowercase', action='store_true',help='lowercase all text')
     parser.add_argument('--config', type = int, default= None, help='default configuartion for each number')
+
+    # VQ VAE argument
+    parser.add_argument('--init_method', type=str, default='uniform', help='Initialize the latent')
 
     # Could add another arguments
 
