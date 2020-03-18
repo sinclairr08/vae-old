@@ -13,10 +13,10 @@ from metrics.uniquegram import UniqueGram
 from metrics.selfbleu import SelfBleu
 
 from utils import to_gpu, log_line, calc_gradient_penalty
-
+from discriminator import MLP_D
 class LSTM_AAE(nn.Module):
     def __init__(self, enc, dec, nlatent, ntokens, nembdim,
-                 nlayers, nDhidden, hidden_noise_r, is_gpu):
+                 nlayers, D_arch, hidden_noise_r, is_gpu):
 
         super(LSTM_AAE, self).__init__()
 
@@ -26,7 +26,7 @@ class LSTM_AAE(nn.Module):
         self.nembdim = nembdim
         self.nlayers = nlayers
         self.nhidden = nlatent
-        self.nDhidden = nDhidden
+        self.D_arch = D_arch
         self.hidden_noise_r = hidden_noise_r
 
         # Model infos
@@ -62,7 +62,10 @@ class LSTM_AAE(nn.Module):
         else:
             raise NotImplementedError
 
-        self.disc = nn.Sequential(
+        self.disc = MLP_D(ninput=self.nlatent, noutput=1, layers=self.D_arch, activation=nn.LeakyReLU(0.2),
+                          is_gpu = is_gpu)
+        '''
+        nn.Sequential(
             nn.Linear(self.nlatent, self.nDhidden),
             nn.LeakyReLU(0.2),
             nn.Linear(self.nDhidden, self.nDhidden),
@@ -70,6 +73,7 @@ class LSTM_AAE(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(self.nDhidden, 1),
         )
+        '''
 
         self.eps = 1e-15
 

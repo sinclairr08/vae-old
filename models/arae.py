@@ -5,10 +5,12 @@ from torch.nn import functional as F
 from torchvision.utils import save_image
 
 from utils import to_gpu, log_line
+from discriminator import MLP_D
+from generator import MLP_G
 
 class ARAE(nn.Module):
     def __init__(self, nlatent, ninput, nhidden,
-                 nDhidden, nGhidden, nnoise, is_gpu):
+                 D_arch, G_arch, nnoise, is_gpu):
 
         super(ARAE, self).__init__()
         # self init area
@@ -16,8 +18,8 @@ class ARAE(nn.Module):
         self.nlatent = nlatent
         self.ninput = ninput
         self.nhidden = nhidden
-        self.nDhidden = nDhidden
-        self.nGhidden = nGhidden
+        self.D_arch = D_arch
+        self.G_arch = G_arch
         self.nnoise = nnoise
 
         # mod : Modlarize within the class
@@ -50,22 +52,30 @@ class ARAE(nn.Module):
         )
 
         # Discriminator
-        self.disc = nn.Sequential(
+        self.disc = MLP_D(ninput=self.nlatent, noutput=1, layers=self.D_arch, activation=nn.LeakyReLU(0.2),
+                          is_gpu = is_gpu)
+        '''
+        nn.Sequential(
             nn.Linear(self.nlatent, self.nDhidden),
             nn.ReLU(),
             nn.Linear(self.nDhidden, self.nDhidden),
             nn.ReLU(),
             nn.Linear(self.nDhidden, 1),
         )
+        '''
 
         # Generator
-        self.gen = nn.Sequential(
+        self.gen = MLP_G(ninput= self.nnoise, noutput=self.nlatent, layers=self.G_arch, activation=nn.ReLU(),
+                         is_gpu = is_gpu)
+        '''
+        nn.Sequential(
             nn.Linear(self.nnoise, self.nGhidden),
             nn.ReLU(),
             nn.Linear(self.nGhidden, self.nGhidden),
             nn.BatchNorm1d(self.nGhidden, eps=1e-15, momentum=0.1),
             nn.Linear(self.nGhidden, self.nlatent),
         )
+        '''
 
         # Epsilon to prevent 0
         self.eps = 1e-15

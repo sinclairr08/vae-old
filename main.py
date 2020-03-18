@@ -75,7 +75,7 @@ def main(args):
         Model = AAE(nlatent=args.nlatent,
                     ninput=args.ninput,
                     nhidden=args.nhidden,
-                    nDhidden=args.nDhidden,
+                    D_arch=args.D_arch,
                     is_gpu = args.cuda)
         Model = to_gpu(Model, args.cuda)
 
@@ -119,8 +119,8 @@ def main(args):
         Model = ARAE(nlatent=args.nlatent,
                     ninput=args.ninput,
                     nhidden=args.nhidden,
-                    nDhidden=args.nDhidden,
-                    nGhidden=args.nGhidden,
+                    D_arch=args.D_arch,
+                    G_arch=args.G_arch,
                     nnoise= args.nnoise,
                     is_gpu = args.cuda)
         Model = to_gpu(Model, args.cuda)
@@ -239,7 +239,7 @@ def main(args):
                          ntokens = ntokens,
                          nembdim = args.nembdim,
                          nlayers= args.nlayers,
-                         nDhidden=args.nDhidden,
+                         D_arch=args.D_arch,
                          hidden_noise_r=args.noise_r,
                          is_gpu = args.cuda)
 
@@ -295,8 +295,8 @@ def main(args):
                          ntokens = ntokens,
                          nembdim = args.nembdim,
                          nlayers= args.nlayers,
-                         nDhidden=args.nDhidden,
-                         nGhidden=args.nGhidden,
+                         D_arch=args.D_arch,
+                         G_arch=args.G_arch,
                          nnoise= args.nnoise,
                          hidden_noise_r=args.noise_r,
                          is_gpu = args.cuda)
@@ -496,6 +496,8 @@ if __name__ == "__main__":
     parser.add_argument('--nnoise', type=int, default=100, help='The dimension of noise for ARAE')
     parser.add_argument('--nDhidden', type=int, default=500, help='The hidden dimension size of Discriminator')
     parser.add_argument('--nGhidden', type=int, default=500, help='The hidden dimension size of Generator')
+    parser.add_argument('--D_arch', type=str, default='300-300', help='The architechture of Discriminator')
+    parser.add_argument('--G_arch', type=str, default='300-300', help='The architechture of Generator')
 
     # Training Arguments
     parser.add_argument('--epochs', type=int, default=20, help='The maximum number of epochs')

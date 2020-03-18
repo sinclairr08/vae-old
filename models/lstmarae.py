@@ -14,9 +14,12 @@ from metrics.selfbleu import SelfBleu
 
 from utils import to_gpu, log_line, calc_gradient_penalty
 
+from discriminator import MLP_D
+from generator import MLP_G
+
 class LSTM_ARAE(nn.Module):
     def __init__(self, enc, dec, nlatent, ntokens, nembdim,
-                 nlayers, nDhidden, nGhidden, nnoise, hidden_noise_r,
+                 nlayers, D_arch, G_arch, nnoise, hidden_noise_r,
                  is_gpu):
 
         super(LSTM_ARAE, self).__init__()
@@ -27,8 +30,8 @@ class LSTM_ARAE(nn.Module):
         self.nembdim = nembdim
         self.nlayers = nlayers
         self.nhidden = nlatent
-        self.nDhidden = nDhidden
-        self.nGhidden = nGhidden
+        self.D_arch = D_arch
+        self.G_arch = G_arch
         self.nnoise = nnoise
         self.hidden_noise_r = hidden_noise_r
 
@@ -65,7 +68,10 @@ class LSTM_ARAE(nn.Module):
         else:
             raise NotImplementedError
 
-        self.disc = nn.Sequential(
+        self.disc = MLP_D(ninput=self.nlatent, noutput=1, layers=self.D_arch, activation=nn.LeakyReLU(0.2),
+                          is_gpu=is_gpu)
+        '''
+        nn.Sequential(
             nn.Linear(self.nlatent, self.nDhidden),
             nn.LeakyReLU(0.2),
             nn.Linear(self.nDhidden, self.nDhidden),
@@ -73,8 +79,12 @@ class LSTM_ARAE(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(self.nDhidden, 1),
         )
+        '''
 
-        self.gen = nn.Sequential(
+        self.gen = MLP_G(ninput=self.nnoise, noutput=self.nlatent, layers=self.G_arch, activation=nn.ReLU(),
+                         is_gpu=is_gpu)
+        '''
+        nn.Sequential(
             nn.Linear(self.nnoise, self.nGhidden),
             nn.BatchNorm1d(self.nGhidden, eps=1e-05, momentum=0.1),
             nn.ReLU(),
@@ -83,6 +93,7 @@ class LSTM_ARAE(nn.Module):
             nn.ReLU(),
             nn.Linear(self.nGhidden, self.nlatent),
         )
+        '''
 
         # optims
         self.eps = 1e-15

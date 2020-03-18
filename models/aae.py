@@ -6,8 +6,10 @@ from torchvision.utils import save_image
 
 from utils import to_gpu, log_line
 
+from discriminator import MLP_D
+
 class AAE(nn.Module):
-    def __init__(self, nlatent, ninput, nhidden, nDhidden, is_gpu):
+    def __init__(self, nlatent, ninput, nhidden, D_arch, is_gpu):
 
         super(AAE, self).__init__()
         # self init area
@@ -15,7 +17,7 @@ class AAE(nn.Module):
         self.nlatent = nlatent
         self.ninput = ninput
         self.nhidden = nhidden
-        self.nDhidden = nDhidden
+        self.D_arch = D_arch
 
         # mod : Modlarize within the class
         # self.enc = None
@@ -47,13 +49,18 @@ class AAE(nn.Module):
         )
 
         # Discriminator
-        self.disc = nn.Sequential(
+        self.disc = MLP_D(ninput=self.nlatent, noutput=1, layers=self.D_arch, activation=nn.LeakyReLU(0.2),
+                          is_gpu = is_gpu)
+
+        '''
+        nn.Sequential(
             nn.Linear(self.nlatent, self.nDhidden),
             nn.ReLU(),
             nn.Linear(self.nDhidden, self.nDhidden),
             nn.ReLU(),
             nn.Linear(self.nDhidden, 1),
         )
+        '''
 
         # Epsilon to prevent 0
         self.eps = 1e-15
