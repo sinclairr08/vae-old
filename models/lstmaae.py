@@ -226,7 +226,7 @@ class LSTM_AAE(nn.Module):
             source = to_gpu(Variable(source), self.is_gpu)
             target = to_gpu(Variable(target), self.is_gpu)
 
-            one = to_gpu(torch.Tensor(len(source), 1).fill_(1), self.is_gpu)
+            one = to_gpu(torch.Tensor(1).fill_(1), self.is_gpu)
             mone = one * -1
 
             # Phase 1 : Train Autoencoder

@@ -9,8 +9,6 @@ class MLP_D(nn.Module):
         self.ninput = ninput
         self.noutput = noutput
 
-        print(layers)
-
         layer_sizes = [ninput] + [int(x) for x in layers.split('-')]
         self.layers = []
 
@@ -36,6 +34,7 @@ class MLP_D(nn.Module):
     def forward(self, x):
         for i, layer in enumerate(self.layers):
             x = layer(x)
+        x = torch.mean(x, dim=0)
         return x
 
     def init_weights(self):

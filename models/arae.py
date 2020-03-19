@@ -138,7 +138,7 @@ class ARAE(nn.Module):
         for batch_idx, (data, target) in enumerate(train_loader):
             data = to_gpu(data, self.is_gpu)
 
-            one = to_gpu(torch.Tensor(len(data), 1).fill_(1), self.is_gpu)
+            one = to_gpu(torch.Tensor(1).fill_(1), self.is_gpu)
             mone = one * -1
 
             # Phase 1 : Train Autoencoder
