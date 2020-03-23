@@ -327,7 +327,8 @@ class LSTM_VQ_VAE(nn.Module):
         return avg_bleus
 
     # mod : Not yet
-    def sample(self, epoch, sample_num, maxlen, idx2word, log_file, save_path, sample_method='sampling'):
+    def sample(self, epoch, sample_num, maxlen, idx2word, log_file, save_path, sample_method='sampling',
+               return_index = False):
         random_noise = to_gpu(torch.randn(sample_num, self.nhidden), self.is_gpu)
 
         start_symbols = to_gpu(Variable(torch.ones(sample_num, 1).long()), self.is_gpu)
@@ -361,6 +362,9 @@ class LSTM_VQ_VAE(nn.Module):
             aug_embs = torch.cat([embs, random_noise.unsqueeze(1)], 2)
 
         cat_token_indicies = torch.cat(all_token_indicies, 1)
+
+        if return_index:
+            return cat_token_indicies.data.cpu().numpy()
 
         if sample_method == 'sampling':
             cat_token_indicies = cat_token_indicies.squeeze(2)

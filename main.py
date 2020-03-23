@@ -5,7 +5,6 @@ import random
 import numpy as np
 import torch
 import torch.utils.data
-import nltk
 
 
 from torch import optim
@@ -22,28 +21,44 @@ from models.lstmvqvae import LSTM_VQ_VAE
 from models.lstmvqvae2 import LSTM_VQ_VAE2
 from models.lstmae import LSTM_AE
 
+from models.lm import train_lm
+
 from utils import to_gpu, batchify, lstm_scores, log_lstm_scores
 from preprocess import Corpus
 from config import config_args
 
 def main(args):
-
-    # Case 1 : MNIST with VAE
-    if args.dataset == 'mnist' and args.model == 'vae':
+    # dataset loading
+    if args.dataset == 'mnist':
         kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
 
         train_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train = True, download=True,
-                           transform = transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle = True, **kwargs
+            datasets.MNIST('./data', train=True, download=True,
+                           transform=transforms.ToTensor()),
+            batch_size=args.batch_size, shuffle=True, **kwargs
         )
 
         test_loader = torch.utils.data.DataLoader(
             datasets.MNIST('./data', train=False, download=True,
                            transform=transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle=False, ** kwargs
+            batch_size=args.batch_size, shuffle=False, **kwargs
         )
 
+    elif args.dataset == 'snli' or args.dataset == 'bc':
+        corpus = Corpus(args.data_path,
+                        maxlen=args.maxlen,
+                        vocab_size=args.nvocab,
+                        lowercase=args.lowercase)
+        ntokens = len(corpus.dictionary.word2idx)
+
+        train_loader = batchify(corpus.train, args.batch_size, shuffle=True, is_gpu=args.cuda)
+        test_loader = batchify(corpus.test, args.batch_size, shuffle=False, is_gpu=args.cuda)
+
+    else:
+        raise NotImplementedError
+
+    # Case 1 : VAE
+    if args.model == 'vae':
         Model = VAE(nlatent=args.nlatent,
                     ninput=args.ninput,
                     nhidden=args.nhidden,
@@ -56,22 +71,8 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
 
-    # Case 2 : MNIST with AAE
-    elif args.dataset == 'mnist' and args.model == 'aae':
-        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
-
-        train_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train = True, download=True,
-                           transform = transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle = True, **kwargs
-        )
-
-        test_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train=False, download=True,
-                           transform=transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle=False, ** kwargs
-        )
-
+    # Case 2 : AAE
+    elif args.model == 'aae':
         Model = AAE(nlatent=args.nlatent,
                     ninput=args.ninput,
                     nhidden=args.nhidden,
@@ -100,22 +101,8 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
-    # Case 3 : MNIST with ARAE
-    elif args.dataset == 'mnist' and args.model == 'arae':
-        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
-
-        train_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train = True, download=True,
-                           transform = transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle = True, **kwargs
-        )
-
-        test_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train=False, download=True,
-                           transform=transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle=False, ** kwargs
-        )
-
+    # Case 3 : ARAE
+    elif args.model == 'arae':
         Model = ARAE(nlatent=args.nlatent,
                     ninput=args.ninput,
                     nhidden=args.nhidden,
@@ -148,22 +135,8 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)
 
-    # Case 4 : MNIST with VQ VAE (Need more automization)
-    elif args.dataset == 'mnist' and args.model == 'vqvae':
-        kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}  # mod : Is it really need?
-
-        train_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train = True, download=True,
-                           transform = transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle = True, **kwargs
-        )
-
-        test_loader = torch.utils.data.DataLoader(
-            datasets.MNIST('./data', train=False, download=True,
-                           transform=transforms.ToTensor()),
-            batch_size=args.batch_size, shuffle=False, ** kwargs
-        )
-
+    # Case 4 : VQ VAE (Need more automization)
+    elif args.model == 'vqvae':
         Model = VQ_VAE(nlatent=args.nlatent,
                     ninput=args.ninput,
                     nhidden=args.nhidden,
@@ -179,18 +152,8 @@ def main(args):
             Model.test_epoch(epoch, test_loader, args.log_file)
             Model.sample(epoch, sample_num=args.sample_num, save_path=args.save_path)  ## MODIFICATION
 
-    # Case 5 : SNLI with LSTM-VAE
-    elif args.dataset == 'snli' and args.model == 'lstmvae':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
-
-        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
-
+    # Case 5 : LSTM-VAE
+    elif args.model == 'lstmvae':        # mod : bc or other datasets
         Model = LSTM_VAE(enc = 'lstm', dec= 'lstm',
                          nlatent= args.nlatent,
                          ntokens = ntokens,
@@ -207,6 +170,8 @@ def main(args):
         bleus = np.array([])
         selfbleus = np.array([])
         dists = np.array([])
+        rev_ppls = np.array([])
+        for_ppls = np.array([])
 
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
@@ -217,23 +182,18 @@ def main(args):
                                                    sample_method = 'greedy')
                                                    # sample_method='sampling')
 
-            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
-                        bleus, selfbleus, dists)
+            rev_ppl, for_ppl = train_lm(data_path=args.data_path, save_path=args.save_path, maxlen=args.maxlen,
+                                        sample_method='greedy',
+                                        dict=corpus.dictionary, N=5, epoch=epoch, model=Model, log_file=args.log_file)
 
-        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+            bleus, selfbleus, dists, rev_ppls, for_ppls = lstm_scores(ep_bleus, ep_selfbleus, ep_dists, rev_ppl,
+                                                                      for_ppl,
+                                                                      bleus, selfbleus, dists, rev_ppls, for_ppls)
 
-    # Case 6 : SNLI with LSTM-AAE
-    elif args.dataset == 'snli' and args.model == 'lstmaae':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
+        log_lstm_scores(bleus, selfbleus, dists, rev_ppls, for_ppls, args.log_file)
 
-        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
-
+    # Case 6 : LSTM-AAE
+    elif args.model == 'lstmaae':        # mod : bc or other datasets
         Model = LSTM_AAE(enc = 'lstm', dec= 'lstm',
                          nlatent= args.nlatent,
                          ntokens = ntokens,
@@ -260,6 +220,9 @@ def main(args):
         bleus = np.array([])
         selfbleus = np.array([])
         dists = np.array([])
+        rev_ppls = np.array([])
+        for_ppls = np.array([])
+
         for epoch in range(1, args.epochs + 1):
             if epoch in gan_schedule:
                 niters_gan += 1
@@ -273,23 +236,18 @@ def main(args):
                                                    sample_method='greedy')
                                                    #sample_method='sampling')
 
-            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
-                                                  bleus, selfbleus, dists)
+            rev_ppl, for_ppl = train_lm(data_path=args.data_path, save_path=args.save_path, maxlen=args.maxlen,
+                                        sample_method='greedy',
+                                        dict=corpus.dictionary, N=5, epoch=epoch, model=Model, log_file=args.log_file)
 
-        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+            bleus, selfbleus, dists, rev_ppls, for_ppls = lstm_scores(ep_bleus, ep_selfbleus, ep_dists, rev_ppl,
+                                                                      for_ppl,
+                                                                      bleus, selfbleus, dists, rev_ppls, for_ppls)
 
-    # Case 7 : SNLI with LSTM-ARAE
-    elif args.dataset == 'snli' and args.model == 'lstmarae':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
+        log_lstm_scores(bleus, selfbleus, dists, rev_ppls, for_ppls, args.log_file)
 
-        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
-
+    # Case 7 : LSTM-ARAE
+    elif args.model == 'lstmarae':        # mod : bc or other datasets
         Model = LSTM_ARAE(enc = 'lstm', dec= 'lstm',
                          nlatent= args.nlatent,
                          ntokens = ntokens,
@@ -319,6 +277,9 @@ def main(args):
         bleus = np.array([])
         selfbleus = np.array([])
         dists = np.array([])
+        rev_ppls = np.array([])
+        for_ppls = np.array([])
+
         for epoch in range(1, args.epochs + 1):
             if epoch in gan_schedule:
                 niters_gan += 1
@@ -331,20 +292,16 @@ def main(args):
                          log_file = args.log_file, save_path=args.save_path,
                                                    sample_method='greedy')
                                                    #sample_method='sampling')
-            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
-                                                  bleus, selfbleus, dists)
+            rev_ppl, for_ppl = train_lm(data_path=args.data_path, save_path=args.save_path, maxlen=args.maxlen, sample_method='greedy',
+                     dict=corpus.dictionary, N=5, epoch=epoch, model= Model, log_file=args.log_file)
 
-        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+            bleus, selfbleus, dists, rev_ppls, for_ppls = lstm_scores(ep_bleus, ep_selfbleus, ep_dists, rev_ppl, for_ppl,
+                                                  bleus, selfbleus, dists, rev_ppls, for_ppls)
 
-    # Case 8 : SNLI with LSTM_VQ_VAE (Need more automization)
-    elif args.dataset == 'snli' and args.model == 'lstmvqvae':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
+        log_lstm_scores(bleus, selfbleus, dists, rev_ppls, for_ppls, args.log_file)
 
+    # Case 8 : LSTM_VQ_VAE (Need more automization)
+    elif args.model == 'lstmvqvae':        # mod : bc or other datasets
         train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
         test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
 
@@ -365,6 +322,8 @@ def main(args):
         bleus = np.array([])
         selfbleus = np.array([])
         dists = np.array([])
+        rev_ppls = np.array([])
+        for_ppls = np.array([])
 
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
@@ -374,23 +333,18 @@ def main(args):
                          log_file = args.log_file, save_path=args.save_path,
                                                    sample_method='greedy')
                                                    # sample_method='sampling')
-            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
-                                                  bleus, selfbleus, dists)
+            rev_ppl, for_ppl = train_lm(data_path=args.data_path, save_path=args.save_path, maxlen=args.maxlen,
+                                        sample_method='greedy',
+                                        dict=corpus.dictionary, N=5, epoch=epoch, model=Model, log_file=args.log_file)
 
-        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+            bleus, selfbleus, dists, rev_ppls, for_ppls = lstm_scores(ep_bleus, ep_selfbleus, ep_dists, rev_ppl,
+                                                                      for_ppl,
+                                                                      bleus, selfbleus, dists, rev_ppls, for_ppls)
+
+        log_lstm_scores(bleus, selfbleus, dists, rev_ppls, for_ppls, args.log_file)
 
     # Case 9 : SNLI with LSTM-AE
-    elif args.dataset == 'snli' and args.model == 'lstmae':  # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
-
-        train_loader = batchify(corpus.train, args.batch_size, shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size, shuffle=False, is_gpu=args.cuda)
-
+    elif args.model == 'lstmae':  # mod : bc or other datasets
         Model = LSTM_AE(enc='lstm', dec='lstm',
                          nlatent=args.nlatent,
                          ntokens=ntokens,
@@ -406,6 +360,8 @@ def main(args):
         bleus = np.array([])
         selfbleus = np.array([])
         dists = np.array([])
+        rev_ppls = np.array([])
+        for_ppls = np.array([])
 
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
@@ -417,23 +373,18 @@ def main(args):
                                                   sample_method='greedy')
                                                   #sample_method='sampling')
 
-            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
-                                                  bleus, selfbleus, dists)
+            rev_ppl, for_ppl = train_lm(data_path=args.data_path, save_path=args.save_path, maxlen=args.maxlen,
+                                        sample_method='greedy',
+                                        dict=corpus.dictionary, N=5, epoch=epoch, model=Model, log_file=args.log_file)
 
-        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+            bleus, selfbleus, dists, rev_ppls, for_ppls = lstm_scores(ep_bleus, ep_selfbleus, ep_dists, rev_ppl,
+                                                                      for_ppl,
+                                                                      bleus, selfbleus, dists, rev_ppls, for_ppls)
+
+        log_lstm_scores(bleus, selfbleus, dists, rev_ppls, for_ppls, args.log_file)
 
     # Case 10 : SNLI with LSTM_VQ_VAE2
-    elif args.dataset == 'snli' and args.model == 'lstmvqvae2':        # mod : bc or other datasets
-        nltk.download("book")
-        corpus = Corpus('./data/snli',
-                        maxlen=args.maxlen,
-                        vocab_size=args.nvocab,
-                        lowercase=args.lowercase)
-        ntokens = len(corpus.dictionary.word2idx)
-
-        train_loader = batchify(corpus.train, args.batch_size,shuffle=True, is_gpu=args.cuda)
-        test_loader = batchify(corpus.test, args.batch_size,shuffle=False, is_gpu=args.cuda)
-
+    elif args.model == 'lstmvqvae2':        # mod : bc or other datasets
         Model = LSTM_VQ_VAE2(enc = 'lstm', dec= 'lstm',
                          nlatent= args.nlatent,
                          ntokens = ntokens,
@@ -452,6 +403,8 @@ def main(args):
         bleus = np.array([])
         selfbleus = np.array([])
         dists = np.array([])
+        rev_ppls = np.array([])
+        for_ppls = np.array([])
 
         for epoch in range(1, args.epochs + 1):
             Model.train_epoch(epoch, optimizer, train_loader, args.log_file, args.log_interval)
@@ -461,11 +414,15 @@ def main(args):
                          log_file = args.log_file, save_path=args.save_path,
                                                    sample_method='greedy')
                                                    # sample_method='sampling')
-            bleus, selfbleus, dists = lstm_scores(ep_bleus, ep_selfbleus, ep_dists,
-                                                  bleus, selfbleus, dists)
+            rev_ppl, for_ppl = train_lm(data_path=args.data_path, save_path=args.save_path, maxlen=args.maxlen,
+                                        sample_method='greedy',
+                                        dict=corpus.dictionary, N=5, epoch=epoch, model=Model, log_file=args.log_file)
 
-        log_lstm_scores(bleus, selfbleus, dists, args.log_file)
+            bleus, selfbleus, dists, rev_ppls, for_ppls = lstm_scores(ep_bleus, ep_selfbleus, ep_dists, rev_ppl,
+                                                                      for_ppl,
+                                                                      bleus, selfbleus, dists, rev_ppls, for_ppls)
 
+        log_lstm_scores(bleus, selfbleus, dists, rev_ppls, for_ppls, args.log_file)
     else:
         raise NotImplementedError
 
@@ -480,7 +437,7 @@ if __name__ == "__main__":
     parser.add_argument('--sample_num', type=int, default=20, help='The number of samples')
 
     # Data & Model Arguments
-    parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist, snli]')
+    parser.add_argument('--dataset', type=str, default='mnist', help='dataset; [mnist, snli, bc]')
     parser.add_argument('--model', type=str, default='lstmvqvae', help='model; [vae, aae, arae, lstmvae, lstmaae,'
                                                                        'vqvae, lstmvqvae, lstmae]')
     parser.add_argument('--maxlen', type=int, default=30, help='Max length of the sentence; Exceeded words are truncated')
@@ -553,6 +510,11 @@ if __name__ == "__main__":
     args.log_file = os.path.join(args.save_path, 'logs.txt')
     with open(args.log_file, 'w') as f:
         pass
+
+    if args.dataset == 'mnist':
+        args.data_path = './data'
+    else:
+        args.data_path = './data/' + args.dataset
 
     # Random seed
     random.seed(args.seed)

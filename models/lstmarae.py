@@ -444,7 +444,8 @@ class LSTM_ARAE(nn.Module):
         return avg_bleus
 
     # mod : Not yet
-    def sample(self, epoch, sample_num, maxlen, idx2word, log_file, save_path, sample_method='sampling'):
+    def sample(self, epoch, sample_num, maxlen, idx2word, log_file, save_path, sample_method='sampling',
+               return_index = False):
         random_noise = to_gpu(torch.randn(sample_num, self.nnoise), self.is_gpu)
         latent_synth = self.gen(random_noise)
 
@@ -479,6 +480,8 @@ class LSTM_ARAE(nn.Module):
             aug_embs = torch.cat([embs, latent_synth.unsqueeze(1)], 2)
 
         cat_token_indicies = torch.cat(all_token_indicies, 1)
+        if return_index:
+            return cat_token_indicies.data.cpu().numpy()
 
         if sample_method == 'sampling':
             cat_token_indicies = cat_token_indicies.squeeze(2)

@@ -58,13 +58,18 @@ def log_line(line, log_file, is_print = True, is_line = True):
         else:
             print(line, end = ' ')
 
-def lstm_scores(ep_bleus, ep_selfbleus, ep_dists, bleus, selfbleus, dists):
+def lstm_scores(ep_bleus, ep_selfbleus, ep_dists, rev_ppl, for_ppl,
+                bleus, selfbleus, dists, rev_ppls, for_ppls):
     ep_bleus = ep_bleus.round(3)
     ep_selfbleus = ep_selfbleus.round(3)
     ep_dists = ep_dists.round(3)
+    rev_ppl = round(rev_ppl, 3)
+    for_ppl = round(for_ppl, 3)
     print("bleus : {}".format(ep_bleus))
     print("self bleus : {}".format(ep_selfbleus))
     print("dists : {}".format(ep_dists))
+    print("rev ppl : {}".format(rev_ppl))
+    print("for ppl : {}".format(for_ppl))
 
     ep_bleus = np.expand_dims(ep_bleus, axis=0)
     ep_selfbleus = np.expand_dims(ep_selfbleus, axis=0)
@@ -85,9 +90,19 @@ def lstm_scores(ep_bleus, ep_selfbleus, ep_dists, bleus, selfbleus, dists):
     else:
         dists = np.append(dists, ep_dists, axis=0)
 
-    return bleus, selfbleus, dists
+    rev_ppls = np.append(rev_ppls, rev_ppl)
+    for_ppls = np.append(for_ppls, for_ppl)
 
-def log_lstm_scores(bleus, selfbleus, dists, log_file):
+    return bleus, selfbleus, dists, rev_ppls, for_ppls
+
+def log_lstm_scores(bleus, selfbleus, dists, rev_ppls, for_ppls, log_file):
+    final_blue = bleus[-1]
+    final_selfblue = selfbleus[-1]
+    final_dist = dists[-1]
+
+    final_rev_ppl = rev_ppls[-1]
+    final_for_ppl = for_ppls[-1]
+
     bleus = np.transpose(bleus)
     selfbleus = np.transpose(selfbleus)
     dists = np.transpose(dists)
@@ -106,6 +121,27 @@ def log_lstm_scores(bleus, selfbleus, dists, log_file):
         log_line("DIST-{}".format(i+1), log_file)
         for ep_dist in dist:
             log_line(str(ep_dist), log_file)
+
+    log_line("Rev PPL", log_file)
+    for rev_ppl in rev_ppls:
+        log_line(str(rev_ppl), log_file)
+
+    log_line("For PPL", log_file)
+    for for_ppl in for_ppls:
+        log_line(str(for_ppl), log_file)
+
+    log_line("\nFinal Result \n", log_file)
+    for i, bleu in enumerate(final_blue):
+        log_line("BLEU-{} : {}".format(i + 1, bleu), log_file)
+
+    for i, selfbleu in enumerate(final_selfblue):
+        log_line("SELF BLEU-{} : {}".format(i + 1, selfbleu), log_file)
+
+    for i, dist in enumerate(final_dist):
+        log_line("DIST-{} : {}".format(i + 1, dist), log_file)
+
+    log_line("Rev PPL : {}".format(final_rev_ppl), log_file)
+    log_line("For PPL : {}".format(final_for_ppl), log_file)
 
 ''' Steal from https://github.com/caogang/wgan-gp/blob/master/gan_cifar10.py '''
 def calc_gradient_penalty(netD, gan_gp_lambda, real_data, fake_data):
